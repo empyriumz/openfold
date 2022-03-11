@@ -303,9 +303,13 @@ class OpenFoldDataset(torch.utils.data.Dataset):
                 weights = []
                 idx = []
                 for _ in range(max_cache_len):
-                    candidate_idx = next(idx_iter)
-                    chain_id = dataset.idx_to_chain_id(candidate_idx)
-                    chain_data_cache_entry = chain_data_cache[chain_id]
+                    candidate_idx = next(idx_iter) 
+                    chain_id = dataset.idx_to_chain_id(candidate_idx).lower()
+                    #print(chain_id)
+                    try:
+                        chain_data_cache_entry = chain_data_cache[chain_id]
+                    except:
+                        continue
                     if(not deterministic_train_filter(chain_data_cache_entry)):
                         continue
 

@@ -7,10 +7,6 @@ import os
 #os.environ["MASTER_PORT"]="42069"
 #os.environ["NODE_RANK"]="0"
 
-import random
-import time
-
-import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
@@ -19,7 +15,7 @@ from pytorch_lightning.plugins.training_type import DeepSpeedPlugin, DDPPlugin
 from pytorch_lightning.plugins.environments import SLURMEnvironment
 import torch
 
-from openfold.config import model_config
+from openfold.config_small import model_config
 from openfold.data.data_modules import (
     OpenFoldDataModule,
     DummyDataLoader,
@@ -265,9 +261,10 @@ def main(args):
             strict=True,
         )
         callbacks.append(es)
-
-    if(args.log_performance):
-        global_batch_size = args.num_nodes * args.gpus
+    num_gpus = args.gpus if isinstance(args.gpus, int) else len(args.gpus)
+    
+    if(args.log_performance):       
+        global_batch_size = args.num_nodes * num_gpus
         perf = PerformanceLoggingCallback(
             log_file=os.path.join(args.output_dir, "performance_log.json"),
             global_batch_size=global_batch_size,
@@ -296,7 +293,7 @@ def main(args):
         if(args.wandb):
             wdb_logger.experiment.save(args.deepspeed_config_path)
             wdb_logger.experiment.save("openfold/config.py")
-    elif (args.gpus is not None and args.gpus > 1) or args.num_nodes > 1:
+    elif (args.gpus is not None and num_gpus > 1) or args.num_nodes > 1:
         strategy = DDPPlugin(find_unused_parameters=False)
     else:
         strategy = None
@@ -307,13 +304,14 @@ def main(args):
         strategy=strategy,
         callbacks=callbacks,
         logger=loggers,
+        auto_select_gpus=True,
     )
 
     if(args.resume_model_weights_only):
         ckpt_path = None
     else:
         ckpt_path = args.resume_from_ckpt
-
+    os.environ["NCCL_DEBUG"] = "INFO"
     trainer.fit(
         model_module, 
         datamodule=data_module,

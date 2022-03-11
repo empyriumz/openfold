@@ -164,12 +164,11 @@ def main(args):
         
         # Relax the prediction.
         t = time.perf_counter()
-        visible_devices = os.getenv("CUDA_VISIBLE_DEVICES")
-        if("cuda" in args.model_device):
-            device_no = args.model_device.split(":")[-1]
-            os.environ["CUDA_VISIBLE_DEVICES"] = device_no
+        # if("cuda" in args.model_device):
+        #     device_no = args.model_device.split(":")[-1]
+        #     os.environ["CUDA_VISIBLE_DEVICES"] = device_no
         relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
-        os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
+   
         logging.info(f"Relaxation time: {time.perf_counter() - t}")
         
         # Save the relaxed PDB.
@@ -198,7 +197,7 @@ if __name__ == "__main__":
         help="""Name of the directory in which to output the prediction""",
     )
     parser.add_argument(
-        "--model_device", type=str, default="cpu",
+        "--model_device", type=str, default="cuda:0",
         help="""Name of the device on which to run the model. Any valid torch
              device name is accepted (e.g. "cpu", "cuda:0")"""
     )
