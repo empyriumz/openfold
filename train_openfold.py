@@ -19,7 +19,7 @@ from pytorch_lightning.plugins.training_type import DeepSpeedPlugin, DDPPlugin
 from pytorch_lightning.plugins.environments import SLURMEnvironment
 import torch
 
-from openfold.config import model_config
+from openfold.config_small import model_config
 from openfold.data.data_modules import (
     OpenFoldDataModule,
     DummyDataLoader,
@@ -97,7 +97,7 @@ class OpenFoldWrapper(pl.LightningModule):
             )
 
         with torch.no_grad():
-            other_metrics = self.compute_validation_metrics(batch, outputs) 
+            other_metrics = self._compute_validation_metrics(batch, outputs) 
 
         for k,v in other_metrics.items():
             self.log(f"train/{k}", v, on_step=False, on_epoch=True, logger=True)
@@ -136,7 +136,7 @@ class OpenFoldWrapper(pl.LightningModule):
                 on_step=False, on_epoch=True, logger=True,
             )
 
-        other_metrics = self.compute_validation_metrics(
+        other_metrics = self._compute_validation_metrics(
             batch, outputs, superimposition_metrics=True,
         ) 
         for k,v in other_metrics.items():
@@ -147,7 +147,7 @@ class OpenFoldWrapper(pl.LightningModule):
         self.model.load_state_dict(self.cached_weights)
         self.cached_weights = None
 
-    def compute_validation_metrics(self, 
+    def _compute_validation_metrics(self, 
         batch, 
         outputs, 
         superimposition_metrics=False
@@ -455,7 +455,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--script_modules", type=bool_type, default=False,
-        help="Whether to TorchScript eligible components of them model"
+        help="Whether to TorchScript eligible components of the model"
     )
     parser.add_argument(
         "--train_chain_data_cache_path", type=str, default=None,

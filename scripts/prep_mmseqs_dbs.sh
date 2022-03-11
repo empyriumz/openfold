@@ -27,14 +27,13 @@ for f in $(ls ${DOWNLOAD_DIR}/*.tar.gz)
 do
   tar --extract --verbose --file="${f}" \
       --directory=$ROOT_DIR
-  rm "${f}"
+  #rm "${f}"
   BASENAME="$(basename {f%%.*})"
   DB_NAME="${BASENAME}_db"
   OLD_PWD=$(pwd)
+  echo $BASENAME $DB_NAME
   cd $ROOT_DIR 
   mmseqs tsv2exprofiledb "${BASENAME}" "${DB_NAME}"
   mmseqs createindex "${DB_NAME}" "${DOWNLOAD_DIR}/tmp/"
   cd "${OLD_PWD}"
 done
-
-

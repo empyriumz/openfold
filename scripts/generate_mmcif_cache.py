@@ -26,8 +26,7 @@ def parse_file(f, args):
 
     local_data = {}
     local_data["release_date"] = mmcif.header["release_date"]
-
-    chain_ids, seqs = mmcif.chain_to_seqres.items()
+    chain_ids, seqs = list(mmcif.chain_to_seqres.keys()), list(mmcif.chain_to_seqres.values())
     local_data["chain_ids"] = chain_ids
     local_data["seqs"] = seqs
     local_data["no_chains"] = len(chain_ids)
@@ -69,5 +68,5 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
+    print(args)
     main(args)
