@@ -16,10 +16,8 @@ from pytorch_lightning.plugins.environments import SLURMEnvironment
 import torch
 
 from openfold.config_small import model_config
-from openfold.data.data_modules import (
-    OpenFoldDataModule,
-    DummyDataLoader,
-)
+from openfold.data.data_modules import OpenFoldDataModule
+
 from openfold.model.model import AlphaFold
 from openfold.model.torchscript import script_preset_
 from openfold.np import residue_constants
@@ -32,6 +30,9 @@ from openfold.utils.loss import AlphaFoldLoss, lddt_ca, compute_drmsd
 from openfold.utils.seed import seed_everything
 from openfold.utils.superimposition import superimpose
 from openfold.utils.tensor_utils import tensor_tree_map
+from openfold.utils.import_weights import (
+    import_jax_weights_,
+)
 from openfold.utils.validation_metrics import (
     gdt_ts,
     gdt_ha,
@@ -48,6 +49,18 @@ class OpenFoldWrapper(pl.LightningModule):
         super(OpenFoldWrapper, self).__init__()
         self.config = config
         self.model = AlphaFold(config)
+        if self.config.finetune_structure_module:
+            import_jax_weights_(self.model, config.param_path, version=config.model_name)
+            self.model.input_embedder.requires_grad_(requires_grad=False)
+            self.model.recycling_embedder.requires_grad_(requires_grad=False)
+            self.model.template_angle_embedder.requires_grad_(requires_grad=False)
+            self.model.template_pair_embedder.requires_grad_(requires_grad=False)
+            self.model.template_pair_stack.requires_grad_(requires_grad=False)
+            self.model.template_pointwise_att.requires_grad_(requires_grad=False)
+            self.model.extra_msa_embedder.requires_grad_(requires_grad=False)
+            self.model.extra_msa_stack.requires_grad_(requires_grad=False)
+            self.model.evoformer.requires_grad_(requires_grad=False)
+
         self.loss = AlphaFoldLoss(config.loss)
         self.ema = ExponentialMovingAverage(
             model=self.model, decay=config.ema.decay
@@ -221,7 +234,10 @@ def main(args):
         train=True, 
         low_prec=(args.precision == "16")
     ) 
-    
+    if args.finetune_structure_module:
+        config["finetune_structure_module"] = True
+        config["param_path"] = args.param_path
+        config["model_name"] = args.model_name
     model_module = OpenFoldWrapper(config)
     if(args.resume_from_ckpt and args.resume_model_weights_only):
         sd = get_fp32_state_dict_from_zero_checkpoint(args.resume_from_ckpt)
@@ -233,7 +249,6 @@ def main(args):
     if(args.script_modules):
         script_preset_(model_module)
 
-    #data_module = DummyDataLoader("new_batch.pickle")
     data_module = OpenFoldDataModule(
         config=config.data, 
         batch_seed=args.seed,
@@ -488,6 +503,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--_alignment_index_path", type=str, default=None,
     )
+    parser.add_argument(
+        "--param_path", type=str, default=None,
+        help="""Path to model parameters. If None, parameters are selected
+             automatically according to the model name from 
+             openfold/resources/params"""
+    )
+    parser.add_argument(
+        "--model_name", type=str, default="model_1",
+        help="""Name of a model config. Choose one of model_{1-5} or 
+             model_{1-5}_ptm, as defined on the AlphaFold GitHub."""
+    )
+    parser.add_argument(
+        "--finetune_structure_module", type=bool_type, default=True,
+        help="Whether to train structure module only"
+    )
     parser = pl.Trainer.add_argparse_args(parser)
    
     # Disable the initial validation pass
@@ -515,5 +545,9 @@ if __name__ == "__main__":
 
     # This re-applies the training-time filters at the beginning of every epoch
     args.reload_dataloaders_every_n_epochs = 1
-
+    if(args.param_path is None):
+        args.param_path = os.path.join(
+            "openfold", "resources", "params", 
+            "params_" + args.model_name + ".npz"
+        )
     main(args)

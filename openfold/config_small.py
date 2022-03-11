@@ -92,8 +92,6 @@ def model_config(name, train=False, low_prec=False):
 
 c_z = mlc.FieldReference(128, field_type=int)
 c_m = mlc.FieldReference(256, field_type=int)
-# c_z = mlc.FieldReference(64, field_type=int)
-# c_m = mlc.FieldReference(128, field_type=int)
 c_t = mlc.FieldReference(64, field_type=int)
 c_e = mlc.FieldReference(64, field_type=int)
 c_s = mlc.FieldReference(384, field_type=int)
@@ -252,7 +250,7 @@ config = mlc.ConfigDict(
                 "max_templates": 4,
                 "shuffle_top_k_prefiltered": 20,
                 "crop": True,
-                "crop_size": 256, #256
+                "crop_size": 256,
                 "supervised": True,
                 "clamp_prob": 0.9,
                 "max_distillation_msa_clusters": 1000,
@@ -262,7 +260,7 @@ config = mlc.ConfigDict(
                 "use_small_bfd": False,
                 "data_loaders": {
                     "batch_size": 1,
-                    "num_workers": 24, #16,
+                    "num_workers": 16,
                 },
             },
         },
@@ -371,7 +369,7 @@ config = mlc.ConfigDict(
                 "c_s": c_s,
                 "no_heads_msa": 8,
                 "no_heads_pair": 4,
-                "no_blocks": 4, #48,
+                "no_blocks": 16,
                 "transition_n": 4,
                 "msa_dropout": 0.15,
                 "pair_dropout": 0.25,
@@ -389,7 +387,7 @@ config = mlc.ConfigDict(
                 "no_qk_points": 4,
                 "no_v_points": 8,
                 "dropout_rate": 0.1,
-                "no_blocks": 4,
+                "no_blocks": 8,
                 "no_transition_layers": 1,
                 "no_resnet_blocks": 2,
                 "no_angles": 7,
