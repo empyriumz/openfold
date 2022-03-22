@@ -369,7 +369,7 @@ config = mlc.ConfigDict(
                 "c_s": c_s,
                 "no_heads_msa": 8,
                 "no_heads_pair": 4,
-                "no_blocks": 16,
+                "no_blocks": 48,
                 "transition_n": 4,
                 "msa_dropout": 0.15,
                 "pair_dropout": 0.25,

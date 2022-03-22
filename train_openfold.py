@@ -510,7 +510,7 @@ if __name__ == "__main__":
              openfold/resources/params"""
     )
     parser.add_argument(
-        "--model_name", type=str, default="model_1",
+        "--model_name", type=str, default="model_3",
         help="""Name of a model config. Choose one of model_{1-5} or 
              model_{1-5}_ptm, as defined on the AlphaFold GitHub."""
     )
