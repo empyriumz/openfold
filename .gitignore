@@ -2,6 +2,7 @@ openfold/resources/
 alignments/
 tmp/
 input_mmcif/
+assembly_and_validation/
 *.pdb
 # Byte-compiled / optimized / DLL files
 __pycache__/
