@@ -215,16 +215,18 @@ class AlphaFold(nn.Module):
                 (*batch_dims, n, n, self.config.input_embedder.c_z),
                 requires_grad=False,
             )
-
             # [*, N, 3]
-            x_prev = z.new_zeros(
-                (*batch_dims, n, residue_constants.atom_type_num, 3),
-                requires_grad=False,
-            )
-
-        x_prev = pseudo_beta_fn(
-            feats["aatype"], x_prev, None
-        ).to(dtype=z.dtype)
+            if "x_prev" in feats:
+                x_prev = feats["x_prev"]
+            else:
+                x_prev = z.new_zeros(
+                    (*batch_dims, n, residue_constants.atom_type_num, 3),
+                    requires_grad=False,
+                )
+        if x_prev.shape[-2] == residue_constants.atom_type_num:
+            x_prev = pseudo_beta_fn(
+                feats["aatype"], x_prev, None
+            ).to(dtype=z.dtype)
 
         # m_1_prev_emb: [*, N, C_m]
         # z_prev_emb: [*, N, N, C_z]
@@ -242,7 +244,7 @@ class AlphaFold(nn.Module):
             m_1_prev_emb *= 0
             z_prev_emb *= 0
 
-        # [*, S_c, N, C_m]
+        # [*, S_c, N, C_m], # recycling only modifies the 1st row of m
         m[..., 0, :, :] += m_1_prev_emb
 
         # [*, N, N, C_z]

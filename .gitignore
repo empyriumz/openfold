@@ -5,6 +5,11 @@ input_mmcif/
 assembly_and_validation/
 fasta_data/
 *.pdb
+*.ccp4
+*.mtz
+*.map
+*.gz
+*.cif
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -13,22 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math
-
-import numpy as np
 import torch
 import torch.nn as nn
-from typing import Dict
-
-from openfold.np import protein
 import openfold.np.residue_constants as rc
 from openfold.utils.rigid_utils import Rotation, Rigid
-from openfold.utils.tensor_utils import (
-    batched_gather,
-    one_hot,
-    tree_map,
-    tensor_tree_map,
-)
+from openfold.utils.tensor_utils import batched_gather
 
 
 def pseudo_beta_fn(aatype, all_atom_positions, all_atom_masks):

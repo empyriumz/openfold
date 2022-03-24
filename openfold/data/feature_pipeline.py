@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import copy
-from typing import Mapping, Tuple, List, Optional, Dict, Sequence
+from typing import Mapping, Tuple, List, Dict, Sequence
 
 import ml_collections
 import numpy as np
