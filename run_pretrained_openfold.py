@@ -169,11 +169,11 @@ def main(args):
         )
 
         # Save the unrelaxed PDB.
-        unrelaxed_output_path = os.path.join(
-            args.output_dir, f'{tag}_{args.model_name}_unrelaxed.pdb'
-        )
-        with open(unrelaxed_output_path, 'w') as f:
-            f.write(protein.to_pdb(unrelaxed_protein))
+        # unrelaxed_output_path = os.path.join(
+        #     args.output_dir, f'{tag}_{args.model_name}_unrelaxed.pdb'
+        # )
+        # with open(unrelaxed_output_path, 'w') as f:
+        #     f.write(protein.to_pdb(unrelaxed_protein))
 
         amber_relaxer = relax.AmberRelaxation(
             use_gpu=(args.model_device != "cpu"),
@@ -191,7 +191,7 @@ def main(args):
         
         # Save the relaxed PDB.
         relaxed_output_path = os.path.join(
-            args.output_dir, f'{tag}_{args.model_name}_relaxed.pdb'
+            args.output_dir, "{}_{}_relaxed_{:.2f}.pdb".format(tag, args.model_name, mean_plddt)
         )
         with open(relaxed_output_path, 'w') as f:
             f.write(relaxed_pdb_str)

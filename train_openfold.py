@@ -15,7 +15,7 @@ from pytorch_lightning.plugins.training_type import DeepSpeedPlugin, DDPPlugin
 from pytorch_lightning.plugins.environments import SLURMEnvironment
 import torch
 
-from openfold.config_small import model_config
+from openfold.config import model_config
 from openfold.data.data_modules import OpenFoldDataModule
 
 from openfold.model.model import AlphaFold
