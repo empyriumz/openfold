@@ -3,6 +3,7 @@ alignments/
 tmp/
 input_mmcif/
 assembly_and_validation/
+fasta_data/
 *.pdb
 # Byte-compiled / optimized / DLL files
 __pycache__/
