@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import os
-import datetime
 from multiprocessing import cpu_count
 from typing import Mapping, Optional, Sequence, Any
 
@@ -675,4 +674,4 @@ class DataPipeline:
         msa_features = self._process_msa_feats(alignment_dir, input_sequence)
 
         return {**core_feats, **template_features, **msa_features}
-
+        

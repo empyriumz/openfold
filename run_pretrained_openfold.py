@@ -24,7 +24,7 @@ import time
 import torch
 
 from openfold.config import model_config
-from openfold.data import templates, feature_pipeline, data_pipeline
+from openfold.data import templates, feature_pipeline, data_pipeline 
 from openfold.model.model import AlphaFold
 from openfold.np import residue_constants, protein
 import openfold.np.relax.relax as relax
@@ -45,16 +45,19 @@ def main(args):
     import_jax_weights_(model, args.param_path, version=args.model_name)
     #script_preset_(model)
     model = model.to(args.model_device)
- 
-    template_featurizer = templates.TemplateHitFeaturizer(
-        mmcif_dir=args.template_mmcif_dir,
-        max_template_date=args.max_template_date,
-        max_hits=config.data.predict.max_templates,
-        kalign_binary_path=args.kalign_binary_path,
-        release_dates_path=args.release_dates_path,
-        obsolete_pdbs_path=args.obsolete_pdbs_path
-    )
-
+    
+    if args.single_template_recyle is None:
+        template_featurizer = templates.TemplateHitFeaturizer(
+            mmcif_dir=args.template_mmcif_dir,
+            max_template_date=args.max_template_date,
+            max_hits=config.data.predict.max_templates,
+            kalign_binary_path=args.kalign_binary_path,
+            release_dates_path=args.release_dates_path,
+            obsolete_pdbs_path=args.obsolete_pdbs_path
+        )
+    else:
+        template_featurizer = None
+        
     use_small_bfd=(args.bfd_database_path is None)
 
     data_processor = data_pipeline.DataPipeline(
@@ -110,7 +113,9 @@ def main(args):
         feature_dict = data_processor.process_fasta(
             fasta_path=fasta_path, alignment_dir=local_alignment_dir
         )
-
+        if args.single_template_recyle is not None:
+            feature_dict = templates.single_template_process(feature_dict, args.single_template_recyle)
+            
         # Remove temporary FASTA file
         os.remove(fasta_path)
     
@@ -168,13 +173,6 @@ def main(args):
             b_factors=plddt_b_factors
         )
 
-        # Save the unrelaxed PDB.
-        # unrelaxed_output_path = os.path.join(
-        #     args.output_dir, f'{tag}_{args.model_name}_unrelaxed.pdb'
-        # )
-        # with open(unrelaxed_output_path, 'w') as f:
-        #     f.write(protein.to_pdb(unrelaxed_protein))
-
         amber_relaxer = relax.AmberRelaxation(
             use_gpu=(args.model_device != "cpu"),
             **config.relax,
@@ -182,17 +180,19 @@ def main(args):
         
         # Relax the prediction.
         t = time.perf_counter()
-        # if("cuda" in args.model_device):
-        #     device_no = args.model_device.split(":")[-1]
-        #     os.environ["CUDA_VISIBLE_DEVICES"] = device_no
         relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
    
         logging.info(f"Relaxation time: {time.perf_counter() - t}")
         
         # Save the relaxed PDB.
-        relaxed_output_path = os.path.join(
-            args.output_dir, "{}_{}_relaxed_{:.2f}.pdb".format(tag, args.model_name, mean_plddt)
-        )
+        if args.phenix_pdb_model is not None:
+            relaxed_output_path = os.path.join(
+                args.output_dir, "{}_{}_enhanced_recyle_{:.2f}.pdb".format(tag, args.model_name, mean_plddt)
+            )
+        else:
+            relaxed_output_path = os.path.join(
+                args.output_dir, "{}_{}_{:.2f}.pdb".format(tag, args.model_name, mean_plddt)
+            )
         with open(relaxed_output_path, 'w') as f:
             f.write(relaxed_pdb_str)
 
@@ -204,6 +204,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "template_mmcif_dir", type=str,
+    )
+    parser.add_argument(
+        "--single_template_recyle", type=str, default=None,
+        help="""Using pdb model refined by Phenix as the template."""
     )
     parser.add_argument(
         "--use_precomputed_alignments", type=str, default=None,

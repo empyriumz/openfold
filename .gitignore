@@ -1,5 +1,6 @@
 openfold/resources/
 alignments/
+precomputed_alignments/
 tmp/
 input_mmcif/
 assembly_and_validation/
@@ -10,6 +11,10 @@ fasta_data/
 *.map
 *.gz
 *.cif
+tests/test_data/alphafold/common/stereo_chemical_props.txt
+clusters-by-entity-40.txt
+chain_data_cache.json
+mmcif_cache.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

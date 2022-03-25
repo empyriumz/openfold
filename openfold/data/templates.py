@@ -1105,3 +1105,30 @@ class TemplateHitFeaturizer:
         return TemplateSearchResult(
             features=template_features, errors=errors, warnings=warnings
         )
+
+def single_template_process(feature, template_path, max_ca_ca_distance=150.0):
+    """
+    the template is exactly the same sequence as the query
+    """
+    with open(template_path, "r") as cif_file:
+        cif_string = cif_file.read()
+    parsing_result = mmcif_parsing.parse(
+                    file_id=feature['domain_name'][0], mmcif_string=cif_string
+                )
+    mmcif_object = parsing_result.mmcif_object
+    feature['template_sequence'] = feature['sequence']
+    sequence = feature['sequence'][0].decode('utf-8')
+    aatype = residue_constants.sequence_to_onehot(
+        sequence, residue_constants.HHBLITS_AA_TO_ID
+    )
+    feature['template_aatype'] = aatype[None,...]
+    feature['template_sum_probs'] = np.array([len(sequence)])[None,...]
+    chains = list(mmcif_object.structure.get_chains())
+
+    all_atom_positions, all_atom_mask = _get_atom_positions(mmcif_object, chains[0].id, max_ca_ca_distance)
+    feature['template_all_atom_positions'] = all_atom_positions[None,...]
+    feature['template_all_atom_mask'] = all_atom_mask[None,...]
+
+    feature['template_domain_names'] = feature['domain_name'][None,...]
+    
+    return feature
