@@ -58,7 +58,7 @@ def _file_name(args, model_name, tag, plddt, relaxed=False):
 def main(args):
     best_plddt = 0.0
     model_list = ["model_1_ptm", "model_2_ptm", "model_3_ptm", "model_4_ptm", "model_5_ptm"]
-    #model_list = ["model_3_ptm"]
+    #model_list = ["model_3_ptm"]  
     for model_name in model_list:
         config = model_config(model_name)
         if args.single_template_recycle is not None:
@@ -71,7 +71,11 @@ def main(args):
             config.model.template.enabled = False
         model = AlphaFold(config)
         model = model.eval()
-        import_jax_weights_(model, args.param_path, version=args.model_name)
+        if args.param_path is None:
+            args.param_path = os.path.join(
+            "openfold", "resources", "params", "params_" + model_name + ".npz"
+        )
+        import_jax_weights_(model, args.param_path, version=model_name)
         model = model.to(args.model_device)
 
         if args.single_template_recycle is None:
@@ -246,7 +250,7 @@ if __name__ == "__main__":
         type=str,
     )
     parser.add_argument(
-        "template_mmcif_dir",
+        "--template_mmcif_dir",
         type=str,
     )
     parser.add_argument(
@@ -308,11 +312,6 @@ if __name__ == "__main__":
     parser.add_argument("--data_random_seed", type=str, default=None)
     add_data_args(parser)
     args = parser.parse_args()
-
-    if args.param_path is None:
-        args.param_path = os.path.join(
-            "openfold", "resources", "params", "params_" + args.model_name + ".npz"
-        )
 
     if args.model_device == "cpu" and torch.cuda.is_available():
         logging.warning(
