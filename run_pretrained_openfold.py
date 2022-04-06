@@ -44,34 +44,39 @@ def _file_name(args, model_name, tag, plddt, relaxed=False):
     elif args.phenix_pdb_model is None and args.single_template_recycle is not None:
         file_name = "{}_{}_template_{:.2f}.pdb".format(tag, model_name, plddt)
     elif args.phenix_pdb_model is not None and args.single_template_recycle is not None:
-        file_name = "{}_{}_recycle_template_{:.2f}.pdb".format(
-            tag, model_name, plddt
-        )
+        file_name = "{}_{}_recycle_template_{:.2f}.pdb".format(tag, model_name, plddt)
     else:
         file_name = "{}_{}_{:.2f}.pdb".format(tag, model_name, plddt)
     if not relaxed:
         file_name = "unrelaxed_" + file_name
-    
+
     return file_name
 
 
 def main(args):
     best_plddt = 0.0
-    model_list = ["model_1_ptm", "model_2_ptm", "model_3_ptm", "model_4_ptm", "model_5_ptm"]
-    #model_list = ["model_3_ptm"]
+    # model_list = ["model_1_ptm", "model_2_ptm", "model_3_ptm", "model_4_ptm", "model_5_ptm"]
+    model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    #model_list = ["model_4"]
     for model_name in model_list:
         config = model_config(model_name)
         if args.single_template_recycle is not None:
             config.data.predict.max_templates = 1
             config.data.predict.max_template_hits = 1
-        else:
-            # Terwilliger paper disables template 
-            # to avoid AlphaFold finding existing models with similar sequences
-            config.data.common.use_templates = False
-            config.model.template.enabled = False
+        # else:
+        #     # Terwilliger paper disables template
+        #     # to avoid AlphaFold finding existing models with similar sequences
+        #     config.data.common.use_templates = False
+        #     config.model.template.enabled = False
+        config.model.extra_msa.enabled = False
+        config.data.common.use_templates = True
+        config.model.template.enabled = True
+        config.data.predict.max_templates = 1
+        config.data.predict.max_template_hits = 1
+        config.model.template.embed_angles = True
         model = AlphaFold(config)
         model = model.eval()
-        import_jax_weights_(model, args.param_path, version=args.model_name)
+        import_jax_weights_(model, args.param_path, version=model_name)
         model = model.to(args.model_device)
 
         if args.single_template_recycle is None:
@@ -144,6 +149,9 @@ def main(args):
                     feature_dict, args.single_template_recycle
                 )
 
+            import pickle
+            with open("feature_dict_normal.pkl", "wb") as f:
+                pickle.dump(feature_dict, f)
             # Remove temporary FASTA file
             os.remove(fasta_path)
 
@@ -175,9 +183,9 @@ def main(args):
                     np.repeat(np.array(coord)[..., None], recycle_dim, axis=-1)
                 )
 
-            # import pickle
-            # with open('saved_processed_feature_normal.pkl', 'wb') as f:
-            #     pickle.dump(processed_feature_dict, f)
+            with open("processed_feature_normal.pkl", "wb") as f:
+                pickle.dump(processed_feature_dict, f)
+
             logging.info("Executing model...")
             batch = processed_feature_dict
             with torch.no_grad():
@@ -201,8 +209,8 @@ def main(args):
                 best_output = [batch, out, model_name]
             if "predicted_tm_score" in out.keys():
                 print("Predicted TM score: {:.2f}".format(out["predicted_tm_score"]))
-        
-    batch, out, model_name = best_output[0], best_output[1], best_output[2] 
+
+    batch, out, model_name = best_output[0], best_output[1], best_output[2]
     plddt = out["plddt"]
     plddt_b_factors = np.repeat(
         plddt[..., None], residue_constants.atom_type_num, axis=-1
@@ -211,32 +219,33 @@ def main(args):
     unrelaxed_protein = protein.from_prediction(
         features=batch, result=out, b_factors=plddt_b_factors
     )
-     # Save the unrelaxed PDB
+    # Save the unrelaxed PDB
     file_name = _file_name(args, model_name, tag, best_plddt, relaxed=False)
     unrelaxed_output_path = os.path.join(
-        args.output_dir, file_name,
+        args.output_dir,
+        file_name,
     )
-    with open(unrelaxed_output_path, 'w') as f:
-        f.write(protein.to_pdb(unrelaxed_protein))
+    # with open(unrelaxed_output_path, "w") as f:
+    #     f.write(protein.to_pdb(unrelaxed_protein))
 
-    amber_relaxer = relax.AmberRelaxation(
-        use_gpu=(args.model_device != "cpu"),
-        **config.relax,
-    )
+    # amber_relaxer = relax.AmberRelaxation(
+    #     use_gpu=(args.model_device != "cpu"),
+    #     **config.relax,
+    # )
 
-    # Relax the prediction.
-    t = time.perf_counter()
-    relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
+    # # Relax the prediction.
+    # t = time.perf_counter()
+    # relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
 
-    logging.info(f"Relaxation time: {time.perf_counter() - t}")
-    print(f"Relaxation time: {time.perf_counter() - t}")
+    # logging.info(f"Relaxation time: {time.perf_counter() - t}")
+    # print(f"Relaxation time: {time.perf_counter() - t}")
 
-    file_name = _file_name(args, model_name, tag, best_plddt, relaxed=True)
-    # Save the relaxed PDB.
-    relaxed_output_path = os.path.join(args.output_dir, file_name)
+    # file_name = _file_name(args, model_name, tag, best_plddt, relaxed=True)
+    # # Save the relaxed PDB.
+    # relaxed_output_path = os.path.join(args.output_dir, file_name)
 
-    with open(relaxed_output_path, "w") as f:
-        f.write(relaxed_pdb_str)
+    # with open(relaxed_output_path, "w") as f:
+    #     f.write(relaxed_pdb_str)
 
 
 if __name__ == "__main__":
@@ -246,8 +255,10 @@ if __name__ == "__main__":
         type=str,
     )
     parser.add_argument(
-        "template_mmcif_dir",
+        "--template_mmcif_dir",
+        default=None,
         type=str,
+        help="Path to find template files in mmcif format",
     )
     parser.add_argument(
         "--single_template_recycle",
@@ -319,5 +330,5 @@ if __name__ == "__main__":
             """The model is being run on CPU. Consider specifying 
             --model_device for better performance"""
         )
-    logging.basicConfig(filename='example.log', level=logging.DEBUG)
+    logging.basicConfig(filename="example.log", level=logging.DEBUG)
     main(args)

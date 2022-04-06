@@ -193,7 +193,7 @@ class AlphaFold(nn.Module):
         msa_mask = feats["msa_mask"]
 
         # Initialize the MSA and pair representations
-
+        # feats["msa_feat"] = torch.zeros_like(feats["msa_feat"])
         # m: [*, S_c, N, C_m]
         # z: [*, N, N, C_z]
         m, z = self.input_embedder(
@@ -201,7 +201,7 @@ class AlphaFold(nn.Module):
             feats["residue_index"],
             feats["msa_feat"],
         )
-
+        # m = torch.zeros_like(m)
         # Initialize the recycling embeddings, if needs be
         if None in [m_1_prev, z_prev, x_prev]:
             # [*, N, C_m]
@@ -301,6 +301,7 @@ class AlphaFold(nn.Module):
         # m: [*, S, N, C_m]
         # z: [*, N, N, C_z]
         # s: [*, N, C_s]
+        #m = torch.zeros_like(m)
         m, z, s = self.evoformer(
             m,
             z,
@@ -309,7 +310,7 @@ class AlphaFold(nn.Module):
             chunk_size=self.globals.chunk_size,
             _mask_trans=self.config._mask_trans,
         )
-
+        #m = torch.zeros_like(m)
         outputs["msa"] = m[..., :n_seq, :, :]
         outputs["pair"] = z
         outputs["single"] = s
