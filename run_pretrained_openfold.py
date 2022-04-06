@@ -55,27 +55,30 @@ def _file_name(args, model_name, tag, plddt, relaxed=False):
 
 def main(args):
     best_plddt = 0.0
-    # model_list = ["model_1_ptm", "model_2_ptm", "model_3_ptm", "model_4_ptm", "model_5_ptm"]
-    model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
-    #model_list = ["model_4"]
+    model_list = ["model_1_ptm", "model_2_ptm", "model_3_ptm", "model_4_ptm", "model_5_ptm"]
+    # model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    # model_list = ["model_4"]
     for model_name in model_list:
         config = model_config(model_name)
         if args.single_template_recycle is not None:
+            config.data.common.use_templates = True
+            config.model.template.enabled = True
             config.data.predict.max_templates = 1
             config.data.predict.max_template_hits = 1
+            config.model.extra_msa.enabled = False
         # else:
         #     # Terwilliger paper disables template
         #     # to avoid AlphaFold finding existing models with similar sequences
         #     config.data.common.use_templates = False
         #     config.model.template.enabled = False
-        config.model.extra_msa.enabled = False
-        config.data.common.use_templates = True
-        config.model.template.enabled = True
-        config.data.predict.max_templates = 1
-        config.data.predict.max_template_hits = 1
-        config.model.template.embed_angles = True
+        # config.model.extra_msa.enabled = False
+        # config.model.template.embed_angles = True
         model = AlphaFold(config)
         model = model.eval()
+        if args.param_path is None:
+            args.param_path = os.path.join(
+                "openfold", "resources", "params", "params_" + model_name + ".npz"
+            )
         import_jax_weights_(model, args.param_path, version=model_name)
         model = model.to(args.model_device)
 
@@ -319,11 +322,6 @@ if __name__ == "__main__":
     parser.add_argument("--data_random_seed", type=str, default=None)
     add_data_args(parser)
     args = parser.parse_args()
-
-    if args.param_path is None:
-        args.param_path = os.path.join(
-            "openfold", "resources", "params", "params_" + args.model_name + ".npz"
-        )
 
     if args.model_device == "cpu" and torch.cuda.is_available():
         logging.warning(
