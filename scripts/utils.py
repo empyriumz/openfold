@@ -22,13 +22,13 @@ def add_data_args(parser: argparse.ArgumentParser):
         '--jackhmmer_binary_path', type=str, default='/usr/bin/jackhmmer'
     )
     parser.add_argument(
-        '--hhblits_binary_path', type=str, default='/usr/bin/hhblits'
+        '--hhblits_binary_path', type=str, default='/opt/conda/envs/openfold/bin/hhblits'
     )
     parser.add_argument(
-        '--hhsearch_binary_path', type=str, default='/usr/bin/hhsearch'
+        '--hhsearch_binary_path', type=str, default='/opt/conda/envs/openfold/bin/hhsearch'
     )
     parser.add_argument(
-        '--kalign_binary_path', type=str, default='/usr/bin/kalign'
+        '--kalign_binary_path', type=str, default='/opt/conda/envs/openfold/bin/kalign'
     )
     parser.add_argument(
         '--max_template_date', type=str, 

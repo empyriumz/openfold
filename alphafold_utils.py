@@ -375,7 +375,7 @@ def hh_process_seq(
 
     hhsearch_runner = hhsearch.HHSearch(
         binary_path="/opt/conda/envs/openfold/bin/hhsearch",
-        databases=[hhDB_dir.as_posix() + "/" + db_prefix],
+        databases=[db_dir],
     )
     with StringIO() as fh:
         SeqIO.write([query_seq], fh, "fasta")
@@ -691,7 +691,7 @@ def get_template_hit_list(
 ):
     assert content_dir is not None
     # from alphafold.data import mmcif_parsing
-    from openfold.data import mmcif_parsing
+    from openfold.data.alphafold import mmcif_parsing
     from Bio.SeqRecord import SeqRecord
     from Bio.Seq import Seq
 

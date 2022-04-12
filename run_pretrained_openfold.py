@@ -64,6 +64,7 @@ def main(args):
     ]
     # model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
     # model_list = ["model_4"]
+    #torch.set_default_dtype(torch.float64)
     for model_name in model_list:
         config = model_config(model_name)
         if args.single_template_recycle is not None:
@@ -78,7 +79,11 @@ def main(args):
         #     config.data.common.use_templates = False
         #     config.model.template.enabled = False
         # config.model.extra_msa.enabled = False
-        # config.model.template.embed_angles = True
+        #config.model.template.embed_angles = False
+        config.data.predict.max_templates = 1
+        config.data.predict.max_template_hits = 1
+        if args.num_recycle:
+            config.data.common.max_recycling_iters = args.num_recycle
         model = AlphaFold(config)
         model = model.eval()
         if args.param_path is None:
@@ -158,14 +163,21 @@ def main(args):
                 fasta_path=fasta_path, alignment_dir=local_alignment_dir
             )
             if args.single_template_recycle is not None:
-                feature_dict = templates.single_template_process(
-                    feature_dict, args.single_template_recycle
-                )
+                # feature_dict = templates.single_template_process(
+                #     feature_dict, args.single_template_recycle
+                # )
+                # feature_dict = templates._deprecated_single_template_process(
+                #     feature_dict, args.single_template_recycle
+                # )
+                import pickle
+                with open('template_feature_7ku7.pkl', 'rb') as f:
+                    template_feature = pickle.load(f)
+                    
+                feature_dict = {**feature_dict, **template_feature}
 
-            import pickle
-
-            with open("feature_dict_normal.pkl", "wb") as f:
-                pickle.dump(feature_dict, f)
+            # import pickle
+            # with open("feature_dict_old.pkl", "wb") as f:
+            #     pickle.dump(feature_dict, f)
             # Remove temporary FASTA file
             os.remove(fasta_path)
 
@@ -197,10 +209,16 @@ def main(args):
                     np.repeat(np.array(coord)[..., None], recycle_dim, axis=-1)
                 )
 
-            with open("processed_feature_normal.pkl", "wb") as f:
-                pickle.dump(processed_feature_dict, f)
+            # with open("processed_feature_normal_old.pkl", "wb") as f:
+            #     pickle.dump(processed_feature_dict, f)
 
             logging.info("Executing model...")
+            for key in processed_feature_dict.keys():
+                if processed_feature_dict[key].dtype == torch.float64:
+                    processed_feature_dict[key] = processed_feature_dict[key].to(torch.float32)
+                # if processed_feature_dict[key].dtype == torch.float32:
+                #     processed_feature_dict[key] = processed_feature_dict[key].to(torch.float64)
+            #model = model.to(torch.float64)
             batch = processed_feature_dict
             with torch.no_grad():
                 batch = {
@@ -239,8 +257,8 @@ def main(args):
         args.output_dir,
         file_name,
     )
-    # with open(unrelaxed_output_path, "w") as f:
-    #     f.write(protein.to_pdb(unrelaxed_protein))
+    with open(unrelaxed_output_path, "w") as f:
+        f.write(protein.to_pdb(unrelaxed_protein))
 
     # amber_relaxer = relax.AmberRelaxation(
     #     use_gpu=(args.model_device != "cpu"),
@@ -261,12 +279,12 @@ def main(args):
     # with open(relaxed_output_path, "w") as f:
     #     f.write(relaxed_pdb_str)
 
-    if args.save_outputs:
-        output_dict_path = os.path.join(
-            args.output_dir, f"{tag}_{args.model_name}_output_dict.pkl"
-        )
-        with open(output_dict_path, "wb") as fp:
-            pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    # if args.save_outputs:
+    #     output_dict_path = os.path.join(
+    #         args.output_dir, f"{tag}_{args.model_name}_output_dict.pkl"
+    #     )
+    #     with open(output_dict_path, "wb") as fp:
+    #         pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":
@@ -286,6 +304,12 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="""Using pdb model refined by Phenix as the template.""",
+    )
+    parser.add_argument(
+        "--num_recycle",
+        type=int,
+        default=None,
+        help="""# of recycling in the inference.""",
     )
     parser.add_argument(
         "--use_precomputed_alignments",
@@ -333,12 +357,6 @@ if __name__ == "__main__":
         type=bool,
         default=False,
         help="Whether to save all model outputs, including embeddings, etc.",
-    )
-    parser.add_argument(
-        "--cpus",
-        type=int,
-        default=4,
-        help="""Number of CPUs with which to run alignment tools""",
     )
     parser.add_argument(
         "--cpus",
