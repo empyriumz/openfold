@@ -327,9 +327,9 @@ config = mlc.ConfigDict(
                     # It's actually 16.
                     "c_hidden": 16,
                     "no_heads": 4,
-                    "inf": 1e5,  # 1e9,
+                    "inf": 1e9,  # 1e9,
                 },
-                "inf": 1e5,  # 1e9,
+                "inf": 1e9,  # 1e9,
                 "eps": eps,  # 1e-6,
                 "enabled": templates_enabled,
                 "embed_angles": embed_template_torsion_angles,

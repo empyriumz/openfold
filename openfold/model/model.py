@@ -267,7 +267,7 @@ class AlphaFold(nn.Module):
 
             # [*, N, N, C_z]
             z = z + template_embeds["template_pair_embedding"]
-
+           
             if self.config.template.embed_angles:
                 # [*, S = S_c + S_t, N, C_m]
                 m = torch.cat(

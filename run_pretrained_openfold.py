@@ -38,6 +38,9 @@ from openfold.utils.tensor_utils import (
 from scripts.utils import add_data_args
 
 
+import warnings
+warnings.filterwarnings("ignore", message="Ignoring unrecognized record"
+                        )
 def _file_name(args, model_name, tag, plddt, relaxed=False):
     if args.phenix_pdb_model is not None and args.single_template_recycle is None:
         file_name = "{}_{}_recycle_{:.2f}.pdb".format(tag, model_name, plddt)
@@ -55,16 +58,15 @@ def _file_name(args, model_name, tag, plddt, relaxed=False):
 
 def main(args):
     best_plddt = 0.0
-    model_list = [
-        "model_1_ptm",
-        "model_2_ptm",
-        "model_3_ptm",
-        "model_4_ptm",
-        "model_5_ptm",
-    ]
-    # model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
-    # model_list = ["model_4"]
-    #torch.set_default_dtype(torch.float64)
+    # model_list = [
+    #     "model_1_ptm",
+    #     "model_2_ptm",
+    #     "model_3_ptm",
+    #     "model_4_ptm",
+    #     "model_5_ptm",
+    # ]
+    model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    # model_list = ["model_3_ptm"]
     for model_name in model_list:
         config = model_config(model_name)
         if args.single_template_recycle is not None:
@@ -79,9 +81,13 @@ def main(args):
         #     config.data.common.use_templates = False
         #     config.model.template.enabled = False
         # config.model.extra_msa.enabled = False
-        #config.model.template.embed_angles = False
-        config.data.predict.max_templates = 1
-        config.data.predict.max_template_hits = 1
+        # config.model.template.embed_angles = False
+        # config.data.predict.max_templates = 1
+        # config.data.predict.max_template_hits = 1
+        if args.phenix_pdb_model is not None:
+            print("Enhanced recycling activated; disable template")
+            config.data.common.use_templates = False
+            config.model.template.enabled = False
         if args.num_recycle:
             config.data.common.max_recycling_iters = args.num_recycle
         model = AlphaFold(config)
@@ -169,11 +175,17 @@ def main(args):
                 # feature_dict = templates._deprecated_single_template_process(
                 #     feature_dict, args.single_template_recycle
                 # )
+                # import pickle
+
+                # with open("template_feature_7ku7.pkl", "rb") as f:
+                #     template_feature = pickle.load(f)
+
+                # feature_dict = {**feature_dict, **template_feature}
                 import pickle
-                with open('template_feature_7ku7.pkl', 'rb') as f:
-                    template_feature = pickle.load(f)
-                    
-                feature_dict = {**feature_dict, **template_feature}
+
+                with open("all_feature_7ku7.pkl", "rb") as f:
+                    feature_dict = pickle.load(f)
+                feature_dict["template_all_atom_mask"] = feature_dict.pop("template_all_atom_masks")
 
             # import pickle
             # with open("feature_dict_old.pkl", "wb") as f:
@@ -195,15 +207,57 @@ def main(args):
 
                 parser = Bio.PDB.PDBParser()
                 structure = parser.get_structure("phenix", args.phenix_pdb_model)
+                # structure_unrelax = parser.get_structure("unrelaxed", "/host/openfold/unrelaxed_7LCI_model_5_ptm_71.52_rebuilt_with_autosharp.pdb")
+                # res_list = Bio.PDB.Selection.unfold_entities(structure, "R")
+                # res_list_unrelax = Bio.PDB.Selection.unfold_entities(structure_unrelax, "R")
+
+                # from Bio import pairwise2
+
+                # res_name = []
+                # res_name_unrelax = []
+                # for res in res_list:
+                #     res_name.append(res.resname) 
+                # for res in res_list_unrelax:
+                #     res_name_unrelax.append(res.resname) 
+    
+                # alignments = pairwise2.align.localms(res_name,res_name_unrelax,2,-1,-0.5,-0.1, gap_char=["-"])
+                # from itertools import cycle
+
+                # res_cycle = cycle(res_list_unrelax)
+                # res_unrelax_aligned = []
+                # for i, res_name in enumerate(alignments[0].seqB):
+                #     if res_name == '-':
+                #         res_unrelax_aligned.append(i)
+                #     else:
+                #         res_unrelax_aligned.append(next(res_cycle))
+                
+                # coord = []
+                # for res_unrelax, res_relax in zip(res_unrelax_aligned, res_list):
+                #     res = res_relax if isinstance(res_unrelax, int) else res_unrelax
+                #     if res.resname == "GLY":
+                #         atom = res["CA"]
+                #         coord.append(atom.get_coord())
+                #     else:
+                #         atom = res["CB"]
+                #         coord.append(atom.get_coord())
                 res_list = Bio.PDB.Selection.unfold_entities(structure, "R")
                 coord = []
                 for res in res_list:
                     if res.resname == "GLY":
                         atom = res["CA"]
                         coord.append(atom.get_coord())
+                        # if atom.get_bfactor() >= 30:
+                        #     coord.append(atom.get_coord())
+                        # else:
+                        #     coord.append(np.array([0.0, 0.0, 0.0], dtype=np.float32))
                     else:
                         atom = res["CB"]
                         coord.append(atom.get_coord())
+                        # if atom.get_bfactor() >= 30:
+                        #     coord.append(atom.get_coord())
+                        # else:
+                        #     coord.append(np.array([0.0, 0.0, 0.0], dtype=np.float32))
+                        
                 recycle_dim = processed_feature_dict["aatype"].shape[-1]
                 processed_feature_dict["x_prev"] = torch.tensor(
                     np.repeat(np.array(coord)[..., None], recycle_dim, axis=-1)
@@ -215,10 +269,12 @@ def main(args):
             logging.info("Executing model...")
             for key in processed_feature_dict.keys():
                 if processed_feature_dict[key].dtype == torch.float64:
-                    processed_feature_dict[key] = processed_feature_dict[key].to(torch.float32)
+                    processed_feature_dict[key] = processed_feature_dict[key].to(
+                        torch.float32
+                    )
                 # if processed_feature_dict[key].dtype == torch.float32:
                 #     processed_feature_dict[key] = processed_feature_dict[key].to(torch.float64)
-            #model = model.to(torch.float64)
+            # model = model.to(torch.float64)
             batch = processed_feature_dict
             with torch.no_grad():
                 batch = {
@@ -260,24 +316,24 @@ def main(args):
     with open(unrelaxed_output_path, "w") as f:
         f.write(protein.to_pdb(unrelaxed_protein))
 
-    # amber_relaxer = relax.AmberRelaxation(
-    #     use_gpu=(args.model_device != "cpu"),
-    #     **config.relax,
-    # )
+    amber_relaxer = relax.AmberRelaxation(
+        use_gpu=(args.model_device != "cpu"),
+        **config.relax,
+    )
+    if np.mean(plddt) >= 70:
+        # Relax the prediction.
+        t = time.perf_counter()
+        relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
 
-    # # Relax the prediction.
-    # t = time.perf_counter()
-    # relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
+        logging.info(f"Relaxation time: {time.perf_counter() - t}")
+        print(f"Relaxation time: {time.perf_counter() - t}")
 
-    # logging.info(f"Relaxation time: {time.perf_counter() - t}")
-    # print(f"Relaxation time: {time.perf_counter() - t}")
+        file_name = _file_name(args, model_name, tag, best_plddt, relaxed=True)
+        # Save the relaxed PDB.
+        relaxed_output_path = os.path.join(args.output_dir, file_name)
 
-    # file_name = _file_name(args, model_name, tag, best_plddt, relaxed=True)
-    # # Save the relaxed PDB.
-    # relaxed_output_path = os.path.join(args.output_dir, file_name)
-
-    # with open(relaxed_output_path, "w") as f:
-    #     f.write(relaxed_pdb_str)
+        with open(relaxed_output_path, "w") as f:
+            f.write(relaxed_pdb_str)
 
     # if args.save_outputs:
     #     output_dict_path = os.path.join(
