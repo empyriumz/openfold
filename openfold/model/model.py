@@ -131,6 +131,7 @@ class AlphaFold(nn.Module):
             # [*, S_t, N, N, C_t]
             t = build_template_pair_feat(
                 single_template_feats,
+                use_unit_vector=self.config.template.use_unit_vector,
                 inf=self.config.template.inf,
                 eps=self.config.template.eps,
                 **self.config.template.distogram,
@@ -240,9 +241,10 @@ class AlphaFold(nn.Module):
         # altogether. We zero them this way instead of computing them
         # conditionally to avoid leaving parameters unused, which has annoying
         # implications for DDP training.
-        if(not _recycle):
-            m_1_prev_emb *= 0
-            z_prev_emb *= 0
+        # EDIT: This has since been removed from the official codebase (2cd61a)
+#        if(not _recycle):
+#            m_1_prev_emb *= 0
+#            z_prev_emb *= 0
 
         # [*, S_c, N, C_m], # recycling only modifies the 1st row of m
         m[..., 0, :, :] += m_1_prev_emb
