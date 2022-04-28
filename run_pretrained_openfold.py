@@ -43,16 +43,24 @@ warnings.filterwarnings("ignore", message="Ignoring unrecognized record"
                         )
 def _file_name(args, model_name, tag, plddt, relaxed=False):
     if args.phenix_pdb_model is not None and args.single_template_recycle is None:
-        file_name = "{}_{}_recycle_{:.2f}.pdb".format(tag, model_name, plddt)
+        file_name = "{}_{}_recycle_{:.2f}".format(tag, model_name, plddt)
+    
     elif args.phenix_pdb_model is None and args.single_template_recycle is not None:
-        file_name = "{}_{}_template_{:.2f}.pdb".format(tag, model_name, plddt)
+        file_name = "{}_{}_template_{:.2f}".format(tag, model_name, plddt)
+    
     elif args.phenix_pdb_model is not None and args.single_template_recycle is not None:
-        file_name = "{}_{}_recycle_template_{:.2f}.pdb".format(tag, model_name, plddt)
+        file_name = "{}_{}_recycle_template_{:.2f}".format(tag, model_name, plddt)
+    
     else:
-        file_name = "{}_{}_{:.2f}.pdb".format(tag, model_name, plddt)
+        file_name = "{}_{}_{:.2f}".format(tag, model_name, plddt)
+    
     if not relaxed:
         file_name = "unrelaxed_" + file_name
-
+    # temporary workaround to name output file with msa tag
+    if args.use_precomputed_alignments != "./precomputed_alignments":
+        file_name = file_name + "_no_msa"
+    
+    file_name = file_name + ".pdb"
     return file_name
 
 
@@ -66,28 +74,16 @@ def main(args):
     #     "model_5_ptm",
     # ]
     model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
-    # model_list = ["model_3_ptm"]
+    if args.single_template_recycle:
+        model_list = ["model_1", "model_2"] # only 1 and 2 are trained with templates
     for model_name in model_list:
         config = model_config(model_name)
-        if args.single_template_recycle is not None:
-            config.data.common.use_templates = True
-            config.model.template.enabled = True
-            config.data.predict.max_templates = 1
-            config.data.predict.max_template_hits = 1
-            config.model.extra_msa.enabled = False
-        # else:
-        #     # Terwilliger paper disables template
-        #     # to avoid AlphaFold finding existing models with similar sequences
-        #     config.data.common.use_templates = False
-        #     config.model.template.enabled = False
-        # config.model.extra_msa.enabled = False
-        # config.model.template.embed_angles = False
-        # config.data.predict.max_templates = 1
-        # config.data.predict.max_template_hits = 1
-        if args.phenix_pdb_model is not None:
-            print("Enhanced recycling activated; disable template")
-            config.data.common.use_templates = False
-            config.model.template.enabled = False
+        if args.phenix_pdb_model and args.single_template_recycle is None:
+            print("Activate enhanced recycling")
+            # config.data.common.use_templates = False
+            # config.model.template.enabled = False
+        if args.phenix_pdb_model and args.single_template_recycle:
+            print("Activate both enhanced recycling and custom template")
         if args.num_recycle:
             config.data.common.max_recycling_iters = args.num_recycle
         model = AlphaFold(config)
@@ -109,6 +105,7 @@ def main(args):
                 obsolete_pdbs_path=args.obsolete_pdbs_path,
             )
         else:
+            print("Use custom template")
             template_featurizer = None
 
         use_small_bfd = args.bfd_database_path is None
@@ -169,27 +166,9 @@ def main(args):
                 fasta_path=fasta_path, alignment_dir=local_alignment_dir
             )
             if args.single_template_recycle is not None:
-                # feature_dict = templates.single_template_process(
-                #     feature_dict, args.single_template_recycle
-                # )
-                # feature_dict = templates._deprecated_single_template_process(
-                #     feature_dict, args.single_template_recycle
-                # )
-                # import pickle
-
-                # with open("template_feature_7ku7.pkl", "rb") as f:
-                #     template_feature = pickle.load(f)
-
-                # feature_dict = {**feature_dict, **template_feature}
-                import pickle
-
-                with open("all_feature_7ku7.pkl", "rb") as f:
-                    feature_dict = pickle.load(f)
-                feature_dict["template_all_atom_mask"] = feature_dict.pop("template_all_atom_masks")
-
-            # import pickle
-            # with open("feature_dict_old.pkl", "wb") as f:
-            #     pickle.dump(feature_dict, f)
+                feature_dict = templates.single_template_process(
+                    feature_dict, args.single_template_recycle
+                )
             # Remove temporary FASTA file
             os.remove(fasta_path)
 
@@ -263,9 +242,6 @@ def main(args):
                     np.repeat(np.array(coord)[..., None], recycle_dim, axis=-1)
                 )
 
-            # with open("processed_feature_normal_old.pkl", "wb") as f:
-            #     pickle.dump(processed_feature_dict, f)
-
             logging.info("Executing model...")
             for key in processed_feature_dict.keys():
                 if processed_feature_dict[key].dtype == torch.float64:
@@ -274,7 +250,7 @@ def main(args):
                     )
                 # if processed_feature_dict[key].dtype == torch.float32:
                 #     processed_feature_dict[key] = processed_feature_dict[key].to(torch.float64)
-            # model = model.to(torch.float64)
+
             batch = processed_feature_dict
             with torch.no_grad():
                 batch = {
@@ -308,32 +284,32 @@ def main(args):
         features=batch, result=out, b_factors=plddt_b_factors
     )
     # Save the unrelaxed PDB
-    file_name = _file_name(args, model_name, tag, best_plddt, relaxed=False)
-    unrelaxed_output_path = os.path.join(
-        args.output_dir,
-        file_name,
-    )
-    with open(unrelaxed_output_path, "w") as f:
-        f.write(protein.to_pdb(unrelaxed_protein))
+    # file_name = _file_name(args, model_name, tag, best_plddt, relaxed=False)
+    # unrelaxed_output_path = os.path.join(
+    #     args.output_dir,
+    #     file_name,
+    # )
+    # with open(unrelaxed_output_path, "w") as f:
+    #     f.write(protein.to_pdb(unrelaxed_protein))
 
     amber_relaxer = relax.AmberRelaxation(
         use_gpu=(args.model_device != "cpu"),
         **config.relax,
     )
-    if np.mean(plddt) >= 70:
-        # Relax the prediction.
-        t = time.perf_counter()
-        relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
+    #if np.mean(plddt) >= 70:
+    # Relax the prediction.
+    t = time.perf_counter()
+    relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
 
-        logging.info(f"Relaxation time: {time.perf_counter() - t}")
-        print(f"Relaxation time: {time.perf_counter() - t}")
+    logging.info(f"Relaxation time: {time.perf_counter() - t}")
+    print(f"Relaxation time: {time.perf_counter() - t}")
 
-        file_name = _file_name(args, model_name, tag, best_plddt, relaxed=True)
-        # Save the relaxed PDB.
-        relaxed_output_path = os.path.join(args.output_dir, file_name)
+    file_name = _file_name(args, model_name, tag, best_plddt, relaxed=True)
+    # Save the relaxed PDB.
+    relaxed_output_path = os.path.join(args.output_dir, file_name)
 
-        with open(relaxed_output_path, "w") as f:
-            f.write(relaxed_pdb_str)
+    with open(relaxed_output_path, "w") as f:
+        f.write(relaxed_pdb_str)
 
     # if args.save_outputs:
     #     output_dict_path = os.path.join(

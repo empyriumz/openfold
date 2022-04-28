@@ -478,10 +478,6 @@ def _get_atom_positions(
         )
     chain = relevant_chains[0]
 
-    # all_positions = np.zeros([num_res, residue_constants.atom_type_num, 3])
-    # all_positions_mask = np.zeros(
-    #     [num_res, residue_constants.atom_type_num], dtype=np.int64
-    # )
     all_positions = np.zeros([num_res, residue_constants.atom_type_num, 3], dtype=np.float32)
     all_positions_mask = np.zeros(
         [num_res, residue_constants.atom_type_num], dtype=np.float32

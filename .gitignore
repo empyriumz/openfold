@@ -1,4 +1,5 @@
 openfold/resources/
+phenix_data/
 iterative_refinement/
 alignments/
 precomputed_alignments/

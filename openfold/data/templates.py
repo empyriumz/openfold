@@ -1068,7 +1068,7 @@ class TemplateHitFeaturizer:
         )
 
 
-def _deprecated_single_template_process(
+def single_template_process(
     feature, template_path, max_ca_ca_distance=150.0
 ):
     """
@@ -1103,7 +1103,6 @@ def _deprecated_single_template_process(
 
     return feature
 
-
 # def single_template_process(
 #     feature, template_path, hhDB_dir="/data/openfold/pdb70/pdb70"
 # ):
@@ -1111,23 +1110,30 @@ def _deprecated_single_template_process(
 #     from Bio.SeqRecord import SeqRecord
 #     from Bio.Seq import Seq
 #     from pathlib import Path
-#     # from openfold.data.alphafold.templates import (
-#     #     _extract_template_features,
-#     #     _get_pdb_id_and_chain,
-#     #     _build_query_to_hit_index_mapping,
-#     # )
 
-#     working_cif_file_list = [Path(template_path)]
+#     cif_file_list = [Path(template_path)]
 #     query_sequence = feature["sequence"][0].decode("utf-8")
-#     query_seq = SeqRecord(Seq(query_sequence), id="query", name="", description="")
-#     content_dir = "./"
-
-#     template_hit_list = get_template_hit_list(
-#         cif_files=working_cif_file_list,
-#         query_seq=query_seq,
-#         hhDB_dir=hhDB_dir,
-#         content_dir=content_dir,
-#     )
+#     len_query = len(query_sequence)
+    
+#     hit = parsers.TemplateHit(index=1, 
+#                               name="abcd", 
+#                               aligned_cols=len_query,
+#                               sum_probs=float(len_query),
+#                               query=query_sequence,
+#                               hit_sequence=query_sequence,
+#                               indices_query=list(range(len_query)),
+#                               indices_hit=list(range(len_query)))
+    
+#     for i, filepath in enumerate(cif_file_list):
+#         if not str(filepath).endswith(".cif"):
+#             continue
+#         print("CIF file included:", i + 1, str(filepath))
+#         with filepath.open("r") as fh:
+#             filestr = fh.read()
+#             mmcif_obj = mmcif_parsing.parse(file_id=filepath.stem, mmcif_string=filestr)
+#             mmcif = mmcif_obj.mmcif_object
+            
+#     template_hit_list = [[hit, mmcif]]
 
 #     if template_hit_list:
 #         # process hits into template features
@@ -1142,32 +1148,15 @@ def _deprecated_single_template_process(
 #         for template_feature_name in TEMPLATE_FEATURES:
 #             template_features[template_feature_name] = []
 
-#         # Select only one chain from any cif file
-#         unique_template_hits = []
-#         pdb_text_list = []
+#         # modifications to alphafold/data/templates.py _process_single_hit
+#         hit_pdb_code, hit_chain_id = mmcif.file_id, "A"
+#         keys = list(range(len_query))
+#         values = keys
+#         mapping = dict(zip(keys, values))
+#         template_sequence = hit.hit_sequence.replace("-", "")
 
-#         for [hit, mmcif] in sorted(
-#             template_hit_list, key=lambda xx: xx[0].sum_probs, reverse=True
-#         ):
-#             pdb_text = hit.name.split()[0].split("_")[0]
-#             if pdb_text in pdb_text_list:
-#                 continue  # skip dups from same PDB entry
-#             pdb_text_list.append(pdb_text)
-#             unique_template_hits.append(hit)
-
-#             # modifications to alphafold/data/templates.py _process_single_hit
-#             hit_pdb_code, hit_chain_id = _get_pdb_id_and_chain(hit)
-#             mapping = _build_query_to_hit_index_mapping(
-#                 hit.query,
-#                 hit.hit_sequence,
-#                 hit.indices_hit,
-#                 hit.indices_query,
-#                 query_sequence,
-#             )
-#             template_sequence = hit.hit_sequence.replace("-", "")
-
-#             try:
-#                 features, _ = _extract_template_features(
+#         try:
+#             features, _ = _extract_template_features(
 #                     mmcif_object=mmcif,
 #                     pdb_id=hit_pdb_code,
 #                     mapping=mapping,
@@ -1176,11 +1165,12 @@ def _deprecated_single_template_process(
 #                     template_chain_id=hit_chain_id,
 #                     kalign_binary_path="/opt/conda/envs/openfold/bin/kalign",
 #                 )
-#             except Exception:
-#                 continue
-#             features["template_sum_probs"] = [hit.sum_probs]
-#             for k in template_features:
-#                 template_features[k].append(features[k])
+#         except Exception:
+#             raise ValueError("can't extract features from template!")
+        
+#         features["template_sum_probs"] = [hit.sum_probs]
+#         for k in template_features:
+#             template_features[k].append(features[k])
 
 #         for name in template_features:
 #             template_features[name] = np.stack(template_features[name], axis=0).astype(
@@ -1188,12 +1178,7 @@ def _deprecated_single_template_process(
 #             )
 
 #         print("\nIncluding templates:")
-#         for hit in unique_template_hits:
-#             print("\t", hit.name.split()[0])
-
-#         if len(unique_template_hits) == 0:
-#             print("No templates found...quitting")
-#             raise AssertionError("No templates found...quitting")
+#         print("\t", hit.name.split()[0])
 
 #         for key in template_features.keys():
 #             if np.all(template_features[key] == 0):
@@ -1201,87 +1186,3 @@ def _deprecated_single_template_process(
 #     else:  # no templates
 #         print("Not using any templates")
 #     return {**feature, **template_features}
-
-def single_template_process(
-    feature, template_path, hhDB_dir="/data/openfold/pdb70/pdb70"
-):
-    from alphafold_utils import get_template_hit_list
-    from Bio.SeqRecord import SeqRecord
-    from Bio.Seq import Seq
-    from pathlib import Path
-
-    cif_file_list = [Path(template_path)]
-    query_sequence = feature["sequence"][0].decode("utf-8")
-    len_query = len(query_sequence)
-    
-    hit = parsers.TemplateHit(index=1, 
-                              name="abcd", 
-                              aligned_cols=len_query,
-                              sum_probs=float(len_query),
-                              query=query_sequence,
-                              hit_sequence=query_sequence,
-                              indices_query=list(range(len_query)),
-                              indices_hit=list(range(len_query)))
-    
-    for i, filepath in enumerate(cif_file_list):
-        if not str(filepath).endswith(".cif"):
-            continue
-        print("CIF file included:", i + 1, str(filepath))
-        with filepath.open("r") as fh:
-            filestr = fh.read()
-            mmcif_obj = mmcif_parsing.parse(file_id=filepath.stem, mmcif_string=filestr)
-            mmcif = mmcif_obj.mmcif_object
-            
-    template_hit_list = [[hit, mmcif]]
-
-    if template_hit_list:
-        # process hits into template features
-        from dataclasses import replace
-
-        template_hit_list = [
-            [replace(hit, **{"index": i + 1}), mmcif]
-            for i, [hit, mmcif] in enumerate(template_hit_list)
-        ]
-
-        template_features = {}
-        for template_feature_name in TEMPLATE_FEATURES:
-            template_features[template_feature_name] = []
-
-        # modifications to alphafold/data/templates.py _process_single_hit
-        hit_pdb_code, hit_chain_id = mmcif.file_id, "A"
-        keys = list(range(len_query))
-        values = keys
-        mapping = dict(zip(keys, values))
-        template_sequence = hit.hit_sequence.replace("-", "")
-
-        try:
-            features, _ = _extract_template_features(
-                    mmcif_object=mmcif,
-                    pdb_id=hit_pdb_code,
-                    mapping=mapping,
-                    template_sequence=template_sequence,
-                    query_sequence=query_sequence,
-                    template_chain_id=hit_chain_id,
-                    kalign_binary_path="/opt/conda/envs/openfold/bin/kalign",
-                )
-        except Exception:
-            raise ValueError("can't extract features from template!")
-        
-        features["template_sum_probs"] = [hit.sum_probs]
-        for k in template_features:
-            template_features[k].append(features[k])
-
-        for name in template_features:
-            template_features[name] = np.stack(template_features[name], axis=0).astype(
-                TEMPLATE_FEATURES[name]
-            )
-
-        print("\nIncluding templates:")
-        print("\t", hit.name.split()[0])
-
-        for key in template_features.keys():
-            if np.all(template_features[key] == 0):
-                print("ERROR: Some template features are empty")
-    else:  # no templates
-        print("Not using any templates")
-    return {**feature, **template_features}

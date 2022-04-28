@@ -303,7 +303,6 @@ class AlphaFold(nn.Module):
         # m: [*, S, N, C_m]
         # z: [*, N, N, C_z]
         # s: [*, N, C_s]
-        #m = torch.zeros_like(m)
         m, z, s = self.evoformer(
             m,
             z,
@@ -312,7 +311,6 @@ class AlphaFold(nn.Module):
             chunk_size=self.globals.chunk_size,
             _mask_trans=self.config._mask_trans,
         )
-        #m = torch.zeros_like(m)
         outputs["msa"] = m[..., :n_seq, :, :]
         outputs["pair"] = z
         outputs["single"] = s
