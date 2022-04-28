@@ -157,8 +157,8 @@ def make_protein_features(
 def make_pdb_features(
     protein_object: protein.Protein,
     description: str,
-    confidence_threshold: float = 0.5,
     is_distillation: bool = True,
+    confidence_threshold: float = 50.,
 ) -> FeatureDict:
     pdb_feats = make_protein_features(
         protein_object, description, _is_distillation=True
@@ -596,6 +596,7 @@ class DataPipeline:
         alignment_dir: str,
         is_distillation: bool = True,
         chain_id: Optional[str] = None,
+        _structure_index: Optional[str] = None,
         _alignment_index: Optional[str] = None,
     ) -> FeatureDict:
         """

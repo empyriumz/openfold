@@ -26,7 +26,7 @@ from openfold.utils.callbacks import (
     EarlyStoppingVerbose,
 )
 from openfold.utils.exponential_moving_average import ExponentialMovingAverage
-from openfold.utils.loss import AlphaFoldLoss, lddt_ca, compute_drmsd
+from openfold.utils.loss import AlphaFoldLoss, lddt_ca
 from openfold.utils.lr_schedulers import AlphaFoldLRScheduler
 from openfold.utils.seed import seed_everything
 from openfold.utils.superimposition import superimpose
@@ -35,6 +35,7 @@ from openfold.utils.import_weights import (
     import_jax_weights_,
 )
 from openfold.utils.validation_metrics import (
+    drmsd,
     gdt_ts,
     gdt_ha,
 )
@@ -66,6 +67,7 @@ class OpenFoldWrapper(pl.LightningModule):
         self.ema = ExponentialMovingAverage(model=self.model, decay=config.ema.decay)
 
         self.cached_weights = None
+        self.last_lr_step = 0
 
     def forward(self, batch):
         return self.model(batch)
@@ -190,6 +192,7 @@ class OpenFoldWrapper(pl.LightningModule):
                 superimposed_pred, gt_coords_masked_ca, all_atom_mask_ca
             )
 
+            metrics["alignment_rmsd"] = alignment_rmsd
             metrics["gdt_ts"] = gdt_ts_score
             metrics["gdt_ha"] = gdt_ha_score
 
@@ -569,6 +572,9 @@ if __name__ == "__main__":
         type=bool_type,
         default=True,
         help="Whether to train structure module only",
+    )
+    parser.add_argument(
+        "--_distillation_alignment_index_path", type=str, default=None,
     )
     parser = pl.Trainer.add_argparse_args(parser)
 
