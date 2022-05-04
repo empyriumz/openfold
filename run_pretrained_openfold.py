@@ -74,6 +74,7 @@ def main(args):
     #     "model_5_ptm",
     # ]
     model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    #model_list = ["model_1"]
     if args.single_template_recycle:
         model_list = ["model_1", "model_2"] # only 1 and 2 are trained with templates
     for model_name in model_list:
@@ -301,8 +302,8 @@ def main(args):
     t = time.perf_counter()
     relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
 
-    logging.info(f"Relaxation time: {time.perf_counter() - t}")
-    print(f"Relaxation time: {time.perf_counter() - t}")
+    print("Relaxation time: {:.1f}".format(time.perf_counter() - t))
+    logging.info("Relaxation time used: {:.1f} seconds".format(time.perf_counter() - t))
 
     file_name = _file_name(args, model_name, tag, best_plddt, relaxed=True)
     # Save the relaxed PDB.
@@ -409,4 +410,8 @@ if __name__ == "__main__":
             --model_device for better performance"""
         )
     logging.basicConfig(filename="example.log", level=logging.DEBUG)
+    from timeit import default_timer as timer
+    start = timer() 
     main(args)
+    end = timer()
+    print("Total time used {:.1f} seconds".format(end - start))

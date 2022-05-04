@@ -172,7 +172,7 @@ class AlphaFold(nn.Module):
 
         return ret
 
-    def iteration(self, feats, m_1_prev, z_prev, x_prev, _recycle=True):
+    def iteration(self, feats, m_1_prev, z_prev, x_prev, is_penultimate_iter=False):
         # Primary output dictionary
         outputs = {}
 
@@ -253,7 +253,7 @@ class AlphaFold(nn.Module):
         z += z_prev_emb
 
         # Possibly prevents memory fragmentation
-        del m_1_prev, z_prev, x_prev, m_1_prev_emb, z_prev_emb
+        del m_1_prev, z_prev, m_1_prev_emb, z_prev_emb
 
         # Embed the templates + merge with MSA/pair embeddings
         if self.config.template.enabled:
@@ -337,8 +337,9 @@ class AlphaFold(nn.Module):
         z_prev = z
 
         # [*, N, 3]
-        x_prev = outputs["final_atom_positions"]
-
+        if is_penultimate_iter:
+            x_prev = outputs["final_atom_positions"]
+        
         return outputs, m_1_prev, z_prev, x_prev
 
     def _disable_activation_checkpointing(self):
@@ -423,9 +424,10 @@ class AlphaFold(nn.Module):
             # Select the features for the current recycling cycle
             fetch_cur_batch = lambda t: t[..., cycle_no]
             feats = tensor_tree_map(fetch_cur_batch, batch)
-
+            print("iteration {}".format(cycle_no))
             # Enable grad iff we're training and it's the final recycling layer
             is_final_iter = cycle_no == (num_iters - 1)
+            is_penultimate_iter = cycle_no == (num_iters - 2)
             with torch.set_grad_enabled(is_grad_enabled and is_final_iter):
                 if is_final_iter:
                     self._enable_activation_checkpointing()
@@ -439,7 +441,7 @@ class AlphaFold(nn.Module):
                     m_1_prev,
                     z_prev,
                     x_prev,
-                    _recycle=(num_iters > 1)
+                    is_penultimate_iter
                 )
 
         # Run auxiliary heads
