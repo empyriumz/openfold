@@ -253,7 +253,7 @@ class AlphaFold(nn.Module):
         z += z_prev_emb
 
         # Possibly prevents memory fragmentation
-        del m_1_prev, z_prev, x_prev, m_1_prev_emb, z_prev_emb
+        del m_1_prev, z_prev, m_1_prev_emb, z_prev_emb
 
         # Embed the templates + merge with MSA/pair embeddings
         if self.config.template.enabled:
@@ -337,7 +337,8 @@ class AlphaFold(nn.Module):
         z_prev = z
 
         # [*, N, 3]
-        x_prev = outputs["final_atom_positions"]
+        if not "x_prev" in feats:
+            x_prev = outputs["final_atom_positions"]
 
         return outputs, m_1_prev, z_prev, x_prev
 

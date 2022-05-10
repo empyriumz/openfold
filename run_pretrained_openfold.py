@@ -56,6 +56,8 @@ def _file_name(args, model_name, tag, plddt, relaxed=False):
     
     if not relaxed:
         file_name = "unrelaxed_" + file_name
+    if args.num_recycle:
+        file_name = file_name + "_{}_iterations".format(args.num_recycle+1)
     # temporary workaround to name output file with msa tag
     if args.use_precomputed_alignments != "./precomputed_alignments":
         file_name = file_name + "_no_msa"
@@ -66,14 +68,8 @@ def _file_name(args, model_name, tag, plddt, relaxed=False):
 
 def main(args):
     best_plddt = 0.0
-    # model_list = [
-    #     "model_1_ptm",
-    #     "model_2_ptm",
-    #     "model_3_ptm",
-    #     "model_4_ptm",
-    #     "model_5_ptm",
-    # ]
     model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    # model_list = ["model_1", "model_2"]
     if args.single_template_recycle:
         model_list = ["model_1", "model_2"] # only 1 and 2 are trained with templates
     for model_name in model_list:
@@ -302,7 +298,7 @@ def main(args):
     relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
 
     logging.info(f"Relaxation time: {time.perf_counter() - t}")
-    print(f"Relaxation time: {time.perf_counter() - t}")
+    print("Relaxation time: {:.1f} seconds".format(time.perf_counter() - t))
 
     file_name = _file_name(args, model_name, tag, best_plddt, relaxed=True)
     # Save the relaxed PDB.
@@ -400,6 +396,7 @@ if __name__ == "__main__":
         "--preset", type=str, default="full_dbs", choices=("reduced_dbs", "full_dbs")
     )
     parser.add_argument("--data_random_seed", type=str, default=None)
+    t_start = time.perf_counter()
     add_data_args(parser)
     args = parser.parse_args()
 
@@ -408,5 +405,7 @@ if __name__ == "__main__":
             """The model is being run on CPU. Consider specifying 
             --model_device for better performance"""
         )
-    logging.basicConfig(filename="example.log", level=logging.DEBUG)
+    logging.basicConfig(filename="example.log", level=logging.INFO)
     main(args)
+    logging.info(f"Total time used: {time.perf_counter() - t_start}")
+    print("Total time used: {:.1f} seconds".format(time.perf_counter() - t_start))
