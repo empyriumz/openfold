@@ -2,6 +2,8 @@ openfold/resources/
 phenix_data/
 enhanced_recycle/
 iterative_refinement/
+enhanced_recycle/
+maxit-v11.100-prod-src/
 alignments/
 precomputed_alignments/
 tmp/

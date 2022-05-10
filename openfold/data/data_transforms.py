@@ -90,7 +90,9 @@ def fix_templates_aatype(protein):
         # Map hhsearch-aatype to our aatype.
         new_order_list = rc.MAP_HHBLITS_AATYPE_TO_OUR_AATYPE
         new_order = torch.tensor(
-            new_order_list, dtype=torch.int64, device=protein["aatype"].device,
+            new_order_list,
+            dtype=torch.int64,
+            device=protein["aatype"].device,
         ).expand(num_templates, -1)
         protein["template_aatype"] = torch.gather(
             new_order, 1, index=protein["template_aatype"]
@@ -103,7 +105,7 @@ def correct_msa_restypes(protein):
     """Correct MSA restype to have the same order as rc."""
     new_order_list = rc.MAP_HHBLITS_AATYPE_TO_OUR_AATYPE
     new_order = torch.tensor(
-        [new_order_list] * protein["msa"].shape[1], 
+        [new_order_list] * protein["msa"].shape[1],
         device=protein["msa"].device,
     ).transpose(0, 1)
     protein["msa"] = torch.gather(new_order, 0, protein["msa"])
@@ -184,8 +186,7 @@ def sample_msa(protein, max_seq, keep_extra, seed=None):
         g.manual_seed(seed)
     shuffled = torch.randperm(num_seq - 1, generator=g) + 1
     index_order = torch.cat(
-        (torch.tensor([0], device=shuffled.device), shuffled), 
-        dim=0
+        (torch.tensor([0], device=shuffled.device), shuffled), dim=0
     )
     num_sel = min(max_seq, num_seq)
     sel_seq, not_sel_seq = torch.split(index_order, [num_sel, num_seq - num_sel])
@@ -269,9 +270,9 @@ def block_delete_msa(protein, config):
 def nearest_neighbor_clusters(protein, gap_agreement_weight=0.0):
     weights = torch.cat(
         [
-            torch.ones(21, device=protein["msa"].device), 
+            torch.ones(21, device=protein["msa"].device),
             gap_agreement_weight * torch.ones(1, device=protein["msa"].device),
-            torch.zeros(1, device=protein["msa"].device)
+            torch.zeros(1, device=protein["msa"].device),
         ],
         0,
     )
@@ -314,9 +315,8 @@ def unsorted_segment_sum(data, segment_ids, num_segments):
     segment_ids = segment_ids.view(segment_ids.shape[0], *((1,) * len(data.shape[1:])))
     segment_ids = segment_ids.expand(data.shape)
     shape = [num_segments] + list(data.shape[1:])
-    tensor = (
-        torch.zeros(*shape, device=segment_ids.device)
-        .scatter_add_(0, segment_ids, data.float())
+    tensor = torch.zeros(*shape, device=segment_ids.device).scatter_add_(
+        0, segment_ids, data.float()
     )
     tensor = tensor.type(data.dtype)
     return tensor
@@ -421,9 +421,7 @@ def make_masked_msa(protein, config, replace_fraction):
     """Create data for BERT on raw MSA."""
     # Add a random amino acid uniformly.
     random_aa = torch.tensor(
-        [0.05] * 20 + [0.0, 0.0], 
-        dtype=torch.float32, 
-        device=protein["aatype"].device
+        [0.05] * 20 + [0.0, 0.0], dtype=torch.float32, device=protein["aatype"].device
     )
 
     categorical_probs = (
@@ -629,9 +627,7 @@ def make_atom14_masks(protein):
 
 def make_atom14_masks_np(batch):
     batch = tree_map(
-        lambda n: torch.tensor(n, device=batch["aatype"].device), 
-        batch, 
-        np.ndarray
+        lambda n: torch.tensor(n, device=batch["aatype"].device), batch, np.ndarray
     )
     out = make_atom14_masks(batch)
     out = tensor_tree_map(lambda t: np.array(t), out)
