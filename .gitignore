@@ -5,6 +5,7 @@ iterative_refinement/
 enhanced_recycle/
 maxit-v11.100-prod-src/
 alignments/
+Deep-Tracer-Offline/
 precomputed_alignments/
 tmp/
 input_mmcif/

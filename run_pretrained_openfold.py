@@ -69,7 +69,7 @@ def _file_name(args, model_name, tag, plddt, relaxed=False):
 def main(args):
     best_plddt = 0.0
     model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
-    # model_list = ["model_1", "model_2"]
+    #model_list = ["model_1", "model_2"]
     if args.single_template_recycle:
         model_list = ["model_1", "model_2"] # only 1 and 2 are trained with templates
     for model_name in model_list:
@@ -182,52 +182,52 @@ def main(args):
 
                 parser = Bio.PDB.PDBParser()
                 structure = parser.get_structure("phenix", args.phenix_pdb_model)
-                # structure_unrelax = parser.get_structure("unrelaxed", "/host/openfold/unrelaxed_7LCI_model_5_ptm_71.52_rebuilt_with_autosharp.pdb")
-                # res_list = Bio.PDB.Selection.unfold_entities(structure, "R")
-                # res_list_unrelax = Bio.PDB.Selection.unfold_entities(structure_unrelax, "R")
-
-                # from Bio import pairwise2
-
-                # res_name = []
-                # res_name_unrelax = []
-                # for res in res_list:
-                #     res_name.append(res.resname) 
-                # for res in res_list_unrelax:
-                #     res_name_unrelax.append(res.resname) 
-    
-                # alignments = pairwise2.align.localms(res_name,res_name_unrelax,2,-1,-0.5,-0.1, gap_char=["-"])
-                # from itertools import cycle
-
-                # res_cycle = cycle(res_list_unrelax)
-                # res_unrelax_aligned = []
-                # for i, res_name in enumerate(alignments[0].seqB):
-                #     if res_name == '-':
-                #         res_unrelax_aligned.append(i)
-                #     else:
-                #         res_unrelax_aligned.append(next(res_cycle))
-                
-                # coord = []
-                # for res_unrelax, res_relax in zip(res_unrelax_aligned, res_list):
-                #     res = res_relax if isinstance(res_unrelax, int) else res_unrelax
-                #     if res.resname == "GLY":
-                #         atom = res["CA"]
-                #         coord.append(atom.get_coord())
-                #     else:
-                #         atom = res["CB"]
-                #         coord.append(atom.get_coord())
+                structure_unrelax = parser.get_structure("unrelaxed", "/host/openfold/fasta_data/7lci/7lci_23274_one_chain_deposit.pdb")
                 res_list = Bio.PDB.Selection.unfold_entities(structure, "R")
-                coord = []
+                res_list_unrelax = Bio.PDB.Selection.unfold_entities(structure_unrelax, "R")
+
+                from Bio import pairwise2
+
+                res_name = []
+                res_name_unrelax = []
                 for res in res_list:
+                    res_name.append(res.resname) 
+                for res in res_list_unrelax:
+                    res_name_unrelax.append(res.resname) 
+    
+                alignments = pairwise2.align.localms(res_name,res_name_unrelax,2,-1,-0.5,-0.1, gap_char=["-"])
+                from itertools import cycle
+
+                res_cycle = cycle(res_list_unrelax)
+                res_unrelax_aligned = []
+                for i, res_name in enumerate(alignments[0].seqB):
+                    if res_name == '-':
+                        res_unrelax_aligned.append(i)
+                    else:
+                        res_unrelax_aligned.append(next(res_cycle))
+                
+                coord = []
+                for res_unrelax, res_relax in zip(res_unrelax_aligned, res_list):
+                    res = res_relax if isinstance(res_unrelax, int) else res_unrelax
                     if res.resname == "GLY":
                         atom = res["CA"]
                         coord.append(atom.get_coord())
-                        # if atom.get_bfactor() >= 30:
-                        #     coord.append(atom.get_coord())
-                        # else:
-                        #     coord.append(np.array([0.0, 0.0, 0.0], dtype=np.float32))
                     else:
                         atom = res["CB"]
                         coord.append(atom.get_coord())
+                # res_list = Bio.PDB.Selection.unfold_entities(structure, "R")
+                # coord = []
+                # for res in res_list:
+                #     if res.resname == "GLY":
+                #         atom = res["CA"]
+                #         coord.append(atom.get_coord())
+                #         # if atom.get_bfactor() >= 30:
+                #         #     coord.append(atom.get_coord())
+                #         # else:
+                #         #     coord.append(np.array([0.0, 0.0, 0.0], dtype=np.float32))
+                #     else:
+                #         atom = res["CB"]
+                #         coord.append(atom.get_coord())
                         # if atom.get_bfactor() >= 30:
                         #     coord.append(atom.get_coord())
                         # else:

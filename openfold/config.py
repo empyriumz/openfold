@@ -288,8 +288,8 @@ config = mlc.ConfigDict(
             "recycling_embedder": {
                 "c_z": c_z,
                 "c_m": c_m,
-                "min_bin": 3.375,
-                "max_bin": 21.375,
+                "min_bin": 3.25,
+                "max_bin": 20.75,
                 "no_bins": 15,
                 "inf": 1e8,
             },

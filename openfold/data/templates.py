@@ -1187,36 +1187,37 @@ def deprecated_single_template_process(feature, template_path):
 def single_template_process(
     feature, template_path, hhDB_dir="/data/openfold/pdb70/pdb70"
 ):
-    from alphafold_utils import get_template_hit_list
+    from alphafold_utils import get_single_template_hit_list, get_template_hit_list
     from Bio.SeqRecord import SeqRecord
     from Bio.Seq import Seq
     from pathlib import Path
     from openfold.data.alphafold.templates import (
         _extract_template_features,
-        _get_pdb_id_and_chain,
         _build_query_to_hit_index_mapping,
     )
 
-    working_cif_file_list = [Path(template_path)]
+    #working_cif_file_list = [Path(template_path)]
     query_sequence = feature["sequence"][0].decode("utf-8")
     query_seq = SeqRecord(Seq(query_sequence), id="query", name="", description="")
     content_dir = "./"
-
-    template_hit_list = get_template_hit_list(
-        cif_files=working_cif_file_list,
+    ## TODO: include only one template file
+    template_hit_list = get_single_template_hit_list(
+        cif_file=Path(template_path),
         query_seq=query_seq,
         hhDB_dir=hhDB_dir,
         content_dir=content_dir,
     )
-
+    
     if template_hit_list:
-        # process hits into template features
         from dataclasses import replace
-
         template_hit_list = [
-            [replace(hit, **{"index": i + 1}), mmcif]
-            for i, [hit, mmcif] in enumerate(template_hit_list)
-        ]
+                [replace(hit, **{"index": i + 1}), mmcif]
+                for i, [hit, mmcif] in enumerate(template_hit_list)
+            ]
+        template_hit_list = sorted(
+                template_hit_list, key=lambda xx: xx[0].sum_probs, reverse=True
+            )[:3] ## maximum 3 hits (it works even the list is shorter than 3)
+        # process hits into template features
 
         template_features = {}
         for template_feature_name in TEMPLATE_FEATURES:
@@ -1224,19 +1225,13 @@ def single_template_process(
 
         # Select only one chain from any cif file
         unique_template_hits = []
-        pdb_text_list = []
+        #pdb_text_list = []
 
-        for [hit, mmcif] in sorted(
-            template_hit_list, key=lambda xx: xx[0].sum_probs, reverse=True
-        ):
-            pdb_text = hit.name.split()[0].split("_")[0]
-            if pdb_text in pdb_text_list:
-                continue  # skip dups from same PDB entry
-            pdb_text_list.append(pdb_text)
+        for [hit, mmcif] in template_hit_list:
             unique_template_hits.append(hit)
 
             # modifications to alphafold/data/templates.py _process_single_hit
-            hit_pdb_code, hit_chain_id = _get_pdb_id_and_chain(hit)
+            hit_pdb_code, hit_chain_id = "", ""
             mapping = _build_query_to_hit_index_mapping(
                 hit.query,
                 hit.hit_sequence,
