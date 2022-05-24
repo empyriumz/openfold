@@ -12,28 +12,22 @@ source inference code (v2.0.1). The sole exception is model ensembling, which
 fared poorly in DeepMind's own ablation testing and is being phased out in future
 DeepMind experiments. It is omitted here for the sake of reducing clutter. In 
 cases where the *Nature* paper differs from the source, we always defer to the 
-latter. 
+latter.
 
-OpenFold is built to support inference with AlphaFold's original JAX weights.
-It's also faster than the official code on GPU. Try it out for yourself with 
+OpenFold is built to support inference with AlphaFold's official parameters. Try it out for yourself with 
 our [Colab notebook](https://colab.research.google.com/github/aqlaboratory/openfold/blob/main/notebooks/OpenFold.ipynb).
 
-Unlike DeepMind's public code, OpenFold is also trainable. It can be trained 
-with [DeepSpeed](https://github.com/microsoft/deepspeed) and with either `fp16`
-or `bfloat16` half-precision.
+Additionally, OpenFold has the following advantages over the reference implementation:
 
-OpenFold is equipped with an implementation of low-memory attention 
-([Rabe & Staats 2021](https://arxiv.org/pdf/2112.05682.pdf)), which 
-enables inference on extremely long chains.
-
-We've modified [FastFold](https://github.com/hpcaitech/FastFold)'s custom CUDA 
-kernels to support in-place attention during inference and training. These use 
+- Openfold is **trainable** in full precision or `bfloat16` half-precision, with or without [DeepSpeed](https://github.com/microsoft/deepspeed).
+- **Faster inference** on GPU.
+- **Inference on extremely long chains**, made possible by our implementation of low-memory attention 
+([Rabe & Staats 2021](https://arxiv.org/pdf/2112.05682.pdf)).
+- **Custom CUDA attention kernels** modified from [FastFold](https://github.com/hpcaitech/FastFold)'s 
+kernels support in-place attention during inference and training. They use 
 4x and 5x less GPU memory than equivalent FastFold and stock PyTorch 
 implementations, respectively.
-
-We also make available efficient scripts for generating alignments. We've
-used them to generate millions of alignments that will be released alongside
-original OpenFold weights, trained from scratch using our code (more on that soon).
+- **Efficient alignment scripts** using the original AlphaFold HHblits/JackHMMER pipeline or [ColabFold](https://github.com/sokrypton/ColabFold)'s, which uses the faster MMseqs2 instead. We've used them to generate millions of alignments that will be released alongside original OpenFold weights, trained from scratch using our code (more on that soon).
 
 ## Installation (Linux)
 
@@ -122,7 +116,7 @@ pretrained parameters, run e.g.:
 
 ```bash
 python3 run_pretrained_openfold.py \
-    target.fasta \
+    fasta_dir \
     data/pdb_mmcif/mmcif_files/ \
     --uniref90_database_path data/uniref90/uniref90.fasta \
     --mgnify_database_path data/mgnify/mgy_clusters_2018_12.fa \
@@ -146,6 +140,14 @@ skip the expensive alignment computation here.
 Note that chunking (as defined in section 1.11.8 of the AlphaFold 2 supplement)
 is enabled by default in inference mode. To disable it, set `globals.chunk_size`
 to `None` in the config.
+
+Inference-time low-memory attention (LMA) can be enabled in the model config.
+This setting trades off speed for vastly improved memory usage. By default,
+LMA is run with query and key chunk sizes of 1024 and 4096, respectively.
+These represent a favorable tradeoff in most memory-constrained cases.
+Powerusers can choose to tweak these settings in 
+`openfold/model/primitives.py`. For more information on the LMA algorithm,
+see the aforementioned Staats & Rabe preprint.
 
 ### Training
 
@@ -297,7 +299,7 @@ docker run \
 -v /mnt/alphafold_database/:/database \
 -ti openfold:latest \
 python3 /opt/openfold/run_pretrained_openfold.py \
-/data/input.fasta \
+/data/fasta_dir \
 /database/pdb_mmcif/mmcif_files/ \
 --uniref90_database_path /database/uniref90/uniref90.fasta \
 --mgnify_database_path /database/mgnify/mgy_clusters_2018_12.fa \
