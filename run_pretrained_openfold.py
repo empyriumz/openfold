@@ -182,7 +182,7 @@ def main(args):
 
                 parser = Bio.PDB.PDBParser()
                 structure = parser.get_structure("phenix", args.phenix_pdb_model)
-                structure_unrelax = parser.get_structure("unrelaxed", "/host/openfold/fasta_data/7lci/7lci_23274_one_chain_deposit.pdb")
+                structure_unrelax = parser.get_structure("unrelaxed", "/host/openfold/fasta_data/7ku7/7ku7_23035_one_chain_deposit.pdb")
                 res_list = Bio.PDB.Selection.unfold_entities(structure, "R")
                 res_list_unrelax = Bio.PDB.Selection.unfold_entities(structure_unrelax, "R")
 

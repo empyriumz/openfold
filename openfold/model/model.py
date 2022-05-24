@@ -338,7 +338,7 @@ class AlphaFold(nn.Module):
 
         # [*, N, 3]
         # if is_final_iter:
-        #     x_prev = outputs["final_atom_positions"]
+        x_prev = outputs["final_atom_positions"]
         
         return outputs, m_1_prev, z_prev, x_prev
 

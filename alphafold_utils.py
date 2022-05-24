@@ -744,6 +744,57 @@ def get_template_hit_list(
     return template_hit_list
 
 
+def get_single_template_hit_list(
+    cif_file=None, query_seq=None, hhDB_dir=None, content_dir=None
+):
+    assert content_dir is not None
+    # from alphafold.data import mmcif_parsing
+    from openfold.data.alphafold import mmcif_parsing
+    from Bio.SeqRecord import SeqRecord
+    from Bio.Seq import Seq
+
+    template_hit_list = []
+
+    print("CIF file included:", str(cif_file))
+    with cif_file.open("r") as fh:
+        filestr = fh.read()
+        mmcif_obj = mmcif_parsing.parse(file_id=cif_file.stem, mmcif_string=filestr)
+        mmcif = mmcif_obj.mmcif_object
+        for chain_id, template_sequence in mmcif.chain_to_seqres.items():
+            template_sequence = mmcif.chain_to_seqres[chain_id]
+            seq_name = cif_file.stem.upper() + "_" + chain_id
+            seq = SeqRecord(
+                    Seq(template_sequence), id=seq_name, name="", description=""
+                )
+            """
+            At this stage, we have a template sequence.
+            and a query sequence.
+            There are two options to generate template features:
+            1. Write new code to manually generate template features
+            2. Get an hhr alignment string, and pass that
+                to the existing template featurizer.
+
+            I chose the second, implemented in hh_process_seq()
+            """
+            try:
+                hit = hh_process_seq(
+                    query_seq=query_seq,
+                    template_seq=seq,
+                    hhDB_dir=hhDB_dir,
+                    content_dir=content_dir,
+                )
+
+            except Exception as e:
+                print("Failed to process %s" % (cif_file), e)
+                hit = None
+            if hit is not None:
+                template_hit_list.append([hit, mmcif])
+                print("Template %s included" % (cif_file))
+            else:
+                print("Template %s not included (failed to process)" % (cif_file))
+
+    return template_hit_list
+
 class flex_double:
     #  just a holder that allows min_max_mean and standard_deviation_of_the_sample
     def __init__(self):

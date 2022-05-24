@@ -24,4 +24,4 @@ def run_pdb_to_cif(pdb_file, content_dir="/host/openfold"):
     )
     return Path(output_file)
 
-run_pdb_to_cif("/host/openfold/fasta_data/7lx5/7lx5_23566_one_chain_deposit.pdb")
+run_pdb_to_cif("/host/openfold/enhanced_recycle/7lci/1st_iter/7LCI_model_3_75.89_rebuilt_with_deepemhancer.pdb")
