@@ -12,18 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from functools import partial
+import weakref
+
 import torch
 import torch.nn as nn
 
-from openfold.utils.feats import (
-    pseudo_beta_fn,
-    build_extra_msa_feat,
-    build_template_angle_feat,
-    build_template_pair_feat,
-    atom14_to_atom37,
-)
 from openfold.model.embedders import (
     InputEmbedder,
     RecyclingEmbedder,
@@ -33,16 +27,26 @@ from openfold.model.embedders import (
 )
 from openfold.model.evoformer import EvoformerStack, ExtraMSAStack
 from openfold.model.heads import AuxiliaryHeads
-import openfold.np.residue_constants as residue_constants
 from openfold.model.structure_module import StructureModule
 from openfold.model.template import (
     TemplatePairStack,
     TemplatePointwiseAttention,
+    embed_templates_average,
+    embed_templates_offload,
+)
+import openfold.np.residue_constants as residue_constants
+from openfold.utils.feats import (
+    pseudo_beta_fn,
+    build_extra_msa_feat,
+    build_template_angle_feat,
+    build_template_pair_feat,
+    atom14_to_atom37,
 )
 from openfold.utils.loss import (
     compute_plddt,
 )
 from openfold.utils.tensor_utils import (
+    add,
     dict_multimap,
     tensor_tree_map,
 )
@@ -64,52 +68,73 @@ class AlphaFold(nn.Module):
         super(AlphaFold, self).__init__()
 
         self.globals = config.globals
-        config = config.model
-        template_config = config.template
-        extra_msa_config = config.extra_msa
+        self.config = config.model
+        self.template_config = self.config.template
+        self.extra_msa_config = self.config.extra_msa
 
         # Main trunk + structure module
         self.input_embedder = InputEmbedder(
-            **config["input_embedder"],
+            **self.config["input_embedder"],
         )
         self.recycling_embedder = RecyclingEmbedder(
-            **config["recycling_embedder"],
+            **self.config["recycling_embedder"],
         )
-        self.template_angle_embedder = TemplateAngleEmbedder(
-            **template_config["template_angle_embedder"],
-        )
-        self.template_pair_embedder = TemplatePairEmbedder(
-            **template_config["template_pair_embedder"],
-        )
-        self.template_pair_stack = TemplatePairStack(
-            **template_config["template_pair_stack"],
-        )
-        self.template_pointwise_att = TemplatePointwiseAttention(
-            **template_config["template_pointwise_attention"],
-        )
-        self.extra_msa_embedder = ExtraMSAEmbedder(
-            **extra_msa_config["extra_msa_embedder"],
-        )
-        self.extra_msa_stack = ExtraMSAStack(
-            **extra_msa_config["extra_msa_stack"],
-        )
+        
+        if(self.template_config.enabled):
+            self.template_angle_embedder = TemplateAngleEmbedder(
+                **self.template_config["template_angle_embedder"],
+            )
+            self.template_pair_embedder = TemplatePairEmbedder(
+                **self.template_config["template_pair_embedder"],
+            )
+            self.template_pair_stack = TemplatePairStack(
+                **self.template_config["template_pair_stack"],
+            )
+            self.template_pointwise_att = TemplatePointwiseAttention(
+                **self.template_config["template_pointwise_attention"],
+            )
+       
+        if(self.extra_msa_config.enabled):
+            self.extra_msa_embedder = ExtraMSAEmbedder(
+                **self.extra_msa_config["extra_msa_embedder"],
+            )
+            self.extra_msa_stack = ExtraMSAStack(
+                **self.extra_msa_config["extra_msa_stack"],
+            )
+        
         self.evoformer = EvoformerStack(
-            **config["evoformer_stack"],
+            **self.config["evoformer_stack"],
         )
         self.structure_module = StructureModule(
-            **config["structure_module"],
+            **self.config["structure_module"],
         )
-
         self.aux_heads = AuxiliaryHeads(
-            config["heads"],
+            self.config["heads"],
         )
 
-        self.config = config
+    def embed_templates(self, batch, z, pair_mask, templ_dim, inplace_safe): 
+        if(self.template_config.offload_templates):
+            return embed_templates_offload(self, 
+                batch, z, pair_mask, templ_dim, inplace_safe=inplace_safe,
+            )
+        elif(self.template_config.average_templates):
+            return embed_templates_average(self, 
+                batch, z, pair_mask, templ_dim, inplace_safe=inplace_safe,
+            )
 
-    def embed_templates(self, batch, z, pair_mask, templ_dim): 
         # Embed the templates one at a time (with a poor man's vmap)
-        template_embeds = []
+        pair_embeds = []
+        n = z.shape[-2]
         n_templ = batch["template_aatype"].shape[templ_dim]
+
+        if(inplace_safe):
+            # We'll preallocate the full pair tensor now to avoid manifesting
+            # a second copy during the stack later on
+            t_pair = z.new_zeros(
+                z.shape[:-3] + 
+                (n_templ, n, n, self.globals.c_t)
+            )
+
         for i in range(n_templ):
             idx = batch["template_aatype"].new_tensor(i)
             single_template_feats = tensor_tree_map(
@@ -117,18 +142,7 @@ class AlphaFold(nn.Module):
                 batch,
             )
 
-            single_template_embeds = {}
-            if self.config.template.embed_angles:
-                template_angle_feat = build_template_angle_feat(
-                    single_template_feats,
-                )
-
-                # [*, S_t, N, C_m]
-                a = self.template_angle_embedder(template_angle_feat)
-
-                single_template_embeds["angle"] = a
-
-            # [*, S_t, N, N, C_t]
+            # [*, N, N, C_t]
             t = build_template_pair_feat(
                 single_template_feats,
                 use_unit_vector=self.config.template.use_unit_vector,
@@ -138,39 +152,57 @@ class AlphaFold(nn.Module):
             ).to(z.dtype)
             t = self.template_pair_embedder(t)
 
-            single_template_embeds.update({"pair": t})
+            if(inplace_safe):
+                t_pair[..., i, :, :, :] = t
+            else:
+                pair_embeds.append(t)
+            
+            del t
 
-            template_embeds.append(single_template_embeds)
-
-        template_embeds = dict_multimap(
-            partial(torch.cat, dim=templ_dim),
-            template_embeds,
-        )
+        if(not inplace_safe):
+            t_pair = torch.cat(pair_embeds, dim=templ_dim)
+       
+        del pair_embeds
 
         # [*, S_t, N, N, C_z]
         t = self.template_pair_stack(
-            template_embeds["pair"], 
+            t_pair, 
             pair_mask.unsqueeze(-3).to(dtype=z.dtype), 
             chunk_size=self.globals.chunk_size,
             use_lma=self.globals.use_lma,
+            inplace_safe=inplace_safe,
             _mask_trans=self.config._mask_trans,
         )
+        del t_pair
 
         # [*, N, N, C_z]
         t = self.template_pointwise_att(
             t, 
             z, 
             template_mask=batch["template_mask"].to(dtype=z.dtype),
-            chunk_size=self.globals.chunk_size,
             use_lma=self.globals.use_lma,
         )
-        t = t * (torch.sum(batch["template_mask"]) > 0)
+
+        if(inplace_safe):
+            t *= (torch.sum(batch["template_mask"], dim=-1) > 0)
+        else:
+            t = t * (torch.sum(batch["template_mask"], dim=-1) > 0)
 
         ret = {}
-        if self.config.template.embed_angles:
-            ret["template_angle_embedding"] = template_embeds["angle"]
 
         ret.update({"template_pair_embedding": t})
+
+        del t
+
+        if self.config.template.embed_angles:
+            template_angle_feat = build_template_angle_feat(
+                batch
+            )
+
+            # [*, S_t, N, C_m]
+            a = self.template_angle_embedder(template_angle_feat)
+
+            ret["template_angle_embedding"] = a
 
         return ret
 
@@ -203,6 +235,7 @@ class AlphaFold(nn.Module):
             feats["target_feat"],
             feats["residue_index"],
             feats["msa_feat"],
+            inplace_safe=inplace_safe,
         )
         # m = torch.zeros_like(m)
         # Initialize the recycling embeddings, if needs be
@@ -231,34 +264,35 @@ class AlphaFold(nn.Module):
                 feats["aatype"], x_prev, None
             ).to(dtype=z.dtype)
 
+        # The recycling embedder is memory-intensive, so we offload first
+        if(self.globals.offload_inference and inplace_safe):
+            m = m.cpu()
+            z = z.cpu()
+
         # m_1_prev_emb: [*, N, C_m]
         # z_prev_emb: [*, N, N, C_z]
         m_1_prev_emb, z_prev_emb = self.recycling_embedder(
             m_1_prev,
             z_prev,
             x_prev,
+            inplace_safe=inplace_safe,
         )
 
-        # If the number of recycling iterations is 0, skip recycling
-        # altogether. We zero them this way instead of computing them
-        # conditionally to avoid leaving parameters unused, which has annoying
-        # implications for DDP training.
-        # EDIT: This has since been removed from the official codebase (2cd61a)
-#        if(not _recycle):
-#            m_1_prev_emb *= 0
-#            z_prev_emb *= 0
+        if(self.globals.offload_inference and inplace_safe):
+            m = m.to(m_1_prev_emb.device)
+            z = z.to(z_prev.device)
 
         # [*, S_c, N, C_m], # recycling only modifies the 1st row of m
         m[..., 0, :, :] += m_1_prev_emb
 
         # [*, N, N, C_z]
-        z += z_prev_emb
+        z = add(z, z_prev_emb, inplace=inplace_safe)
 
         # Possibly prevents memory fragmentation
         del m_1_prev, z_prev, m_1_prev_emb, z_prev_emb
 
         # Embed the templates + merge with MSA/pair embeddings
-        if self.config.template.enabled:
+        if self.config.template.enabled: 
             template_feats = {
                 k: v for k, v in feats.items() if k.startswith("template_")
             }
@@ -267,6 +301,7 @@ class AlphaFold(nn.Module):
                 z,
                 pair_mask.to(dtype=z.dtype),
                 no_batch_dims,
+                inplace_safe=inplace_safe,
             )
 
             # [*, N, N, C_z]
@@ -291,14 +326,63 @@ class AlphaFold(nn.Module):
             # [*, S_e, N, C_e]
             a = self.extra_msa_embedder(build_extra_msa_feat(feats))
 
-            # [*, N, N, C_z]
-            z = self.extra_msa_stack(
-                a,
-                z,
-                msa_mask=feats["extra_msa_mask"].to(dtype=a.dtype),
+            if(self.globals.offload_inference):
+                # To allow the extra MSA stack (and later the evoformer) to
+                # offload its inputs, we remove all references to them here
+                input_tensors = [a, z]
+                del a, z
+    
+                # [*, N, N, C_z]
+                z = self.extra_msa_stack._forward_offload(
+                    input_tensors,
+                    msa_mask=feats["extra_msa_mask"].to(dtype=m.dtype),
+                    chunk_size=self.globals.chunk_size,
+                    use_lma=self.globals.use_lma,
+                    pair_mask=pair_mask.to(dtype=m.dtype),
+                    _mask_trans=self.config._mask_trans,
+                )
+    
+                del input_tensors
+            else:
+                # [*, N, N, C_z]
+                z = self.extra_msa_stack(
+                    a, z,
+                    msa_mask=feats["extra_msa_mask"].to(dtype=m.dtype),
+                    chunk_size=self.globals.chunk_size,
+                    use_lma=self.globals.use_lma,
+                    pair_mask=pair_mask.to(dtype=m.dtype),
+                    inplace_safe=inplace_safe,
+                    _mask_trans=self.config._mask_trans,
+                )
+
+        # Run MSA + pair embeddings through the trunk of the network
+        # m: [*, S, N, C_m]
+        # z: [*, N, N, C_z]
+        # s: [*, N, C_s]          
+        if(self.globals.offload_inference):
+            input_tensors = [m, z]
+            del m, z
+            m, z, s = self.evoformer._forward_offload(
+                input_tensors,
+                msa_mask=msa_mask.to(dtype=input_tensors[0].dtype),
+                pair_mask=pair_mask.to(dtype=input_tensors[1].dtype),
                 chunk_size=self.globals.chunk_size,
                 use_lma=self.globals.use_lma,
+                use_flash=self.globals.use_flash,
+                _mask_trans=self.config._mask_trans,
+            )
+    
+            del input_tensors
+        else:
+            m, z, s = self.evoformer(
+                m,
+                z,
+                msa_mask=msa_mask.to(dtype=m.dtype),
                 pair_mask=pair_mask.to(dtype=z.dtype),
+                chunk_size=self.globals.chunk_size,
+                use_lma=self.globals.use_lma,
+                use_flash=self.globals.use_flash,
+                inplace_safe=inplace_safe,
                 _mask_trans=self.config._mask_trans,
             )
 
@@ -319,12 +403,15 @@ class AlphaFold(nn.Module):
         outputs["pair"] = z
         outputs["single"] = s
 
+        del z
+
         # Predict 3D structure
         outputs["sm"] = self.structure_module(
-            s,
-            z,
+            outputs,
             feats["aatype"],
             mask=feats["seq_mask"].to(dtype=s.dtype),
+            inplace_safe=inplace_safe,
+            _offload_inference=self.globals.offload_inference,
         )
         outputs["final_atom_positions"] = atom14_to_atom37(
             outputs["sm"]["positions"][-1], feats
@@ -338,31 +425,13 @@ class AlphaFold(nn.Module):
         m_1_prev = m[..., 0, :, :]
 
         # [*, N, N, C_z]
-        z_prev = z
+        z_prev = outputs["pair"]
 
         # [*, N, 3]
         # if is_final_iter:
         x_prev = outputs["final_atom_positions"]
         
         return outputs, m_1_prev, z_prev, x_prev
-
-    def _disable_activation_checkpointing(self):
-        self.template_pair_stack.blocks_per_ckpt = None
-        self.evoformer.blocks_per_ckpt = None
-
-        for b in self.extra_msa_stack.blocks:
-            b.ckpt = False
-
-    def _enable_activation_checkpointing(self):
-        self.template_pair_stack.blocks_per_ckpt = (
-            self.config.template.template_pair_stack.blocks_per_ckpt
-        )
-        self.evoformer.blocks_per_ckpt = (
-            self.config.evoformer_stack.blocks_per_ckpt
-        )
-
-        for b in self.extra_msa_stack.blocks:
-            b.ckpt = self.config.extra_msa.extra_msa_stack.ckpt
 
     def forward(self, batch):
         """
@@ -417,14 +486,13 @@ class AlphaFold(nn.Module):
         """
         # Initialize recycling embeddings
         m_1_prev, z_prev, x_prev = None, None, None
+        prevs = [m_1_prev, z_prev, x_prev]
 
-        # Disable activation checkpointing for the first few recycling iters
         is_grad_enabled = torch.is_grad_enabled()
-        self._disable_activation_checkpointing()
 
         # Main recycling loop
         num_iters = batch["aatype"].shape[-1]
-        for cycle_no in range(num_iters):
+        for cycle_no in range(num_iters): 
             # Select the features for the current recycling cycle
             fetch_cur_batch = lambda t: t[..., cycle_no]
             feats = tensor_tree_map(fetch_cur_batch, batch)
@@ -434,7 +502,6 @@ class AlphaFold(nn.Module):
             #is_penultimate_iter = cycle_no == (num_iters - 2)
             with torch.set_grad_enabled(is_grad_enabled and is_final_iter):
                 if is_final_iter:
-                    self._enable_activation_checkpointing()
                     # Sidestep AMP bug (PyTorch issue #65766)
                     if torch.is_autocast_enabled():
                         torch.clear_autocast_cache()
@@ -447,6 +514,11 @@ class AlphaFold(nn.Module):
                     x_prev,
                     is_final_iter
                 )
+
+                if(not is_final_iter):
+                    del outputs
+                    prevs = [m_1_prev, z_prev, x_prev]
+                    del m_1_prev, z_prev, x_prev
 
         # Run auxiliary heads
         outputs.update(self.aux_heads(outputs))

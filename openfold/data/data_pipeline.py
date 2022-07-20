@@ -64,6 +64,51 @@ def make_template_features(
     return template_features
 
 
+def unify_template_features(
+    template_feature_list: Sequence[FeatureDict]
+) -> FeatureDict:
+    out_dicts = []
+    seq_lens = [fd["template_aatype"].shape[1] for fd in template_feature_list]
+    for i, fd in enumerate(template_feature_list):
+        out_dict = {}
+        n_templates, n_res = fd["template_aatype"].shape[:2]
+        for k,v in fd.items():
+            seq_keys = [
+                "template_aatype",
+                "template_all_atom_positions",
+                "template_all_atom_mask",
+            ]
+            if(k in seq_keys):
+                new_shape = list(v.shape)
+                assert(new_shape[1] == n_res)
+                new_shape[1] = sum(seq_lens)
+                new_array = np.zeros(new_shape, dtype=v.dtype)
+                
+                if(k == "template_aatype"):
+                    new_array[..., residue_constants.HHBLITS_AA_TO_ID['-']] = 1
+
+                offset = sum(seq_lens[:i])
+                new_array[:, offset:offset + seq_lens[i]] = v
+                out_dict[k] = new_array
+            else:
+                out_dict[k] = v
+
+        chain_indices = np.array(n_templates * [i])
+        out_dict["template_chain_index"] = chain_indices
+
+        if(n_templates != 0):
+            out_dicts.append(out_dict)
+
+    if(len(out_dicts) > 0):
+        out_dict = {
+            k: np.concatenate([od[k] for od in out_dicts]) for k in out_dicts[0]
+        }
+    else:
+        out_dict = empty_template_feats(sum(seq_lens))
+
+    return out_dict
+
+
 def make_sequence_features(
     sequence: str, description: str, num_res: int
 ) -> FeatureDict:
@@ -406,7 +451,7 @@ class DataPipeline:
     def _parse_msa_data(
         self,
         alignment_dir: str,
-        _alignment_index: Optional[Any] = None,
+        alignment_index: Optional[Any] = None,
     ) -> Mapping[str, Any]:
         msa_data = {}
 
@@ -418,7 +463,7 @@ class DataPipeline:
                 msa = fp.read(size).decode("utf-8")
                 return msa
 
-            for (name, start, size) in _alignment_index["files"]:
+            for (name, start, size) in alignment_index["files"]:
                 ext = os.path.splitext(name)[-1]
 
                 if ext == ".a3m":
@@ -466,7 +511,7 @@ class DataPipeline:
                 fp.seek(start)
                 return fp.read(size).decode("utf-8")
 
-            for (name, start, size) in _alignment_index["files"]:
+            for (name, start, size) in alignment_index["files"]:
                 ext = os.path.splitext(name)[-1]
 
                 if ext == ".hhr":
@@ -486,8 +531,7 @@ class DataPipeline:
 
         return all_hits
 
-    def _process_msa_feats(
-        self,
+    def _get_msas(self,
         alignment_dir: str,
         input_sequence: Optional[str] = None,
         _alignment_index: Optional[str] = None,
@@ -511,6 +555,17 @@ class DataPipeline:
             *[(v["msa"], v["deletion_matrix"]) for v in msa_data.values()]
         )
 
+        return msas, deletion_matrices
+
+    def _process_msa_feats(
+        self,
+        alignment_dir: str,
+        input_sequence: Optional[str] = None,
+        alignment_index: Optional[str] = None
+    ) -> Mapping[str, Any]:
+        msas, deletion_matrices = self._get_msas(
+            alignment_dir, input_sequence, alignment_index
+        )
         msa_features = make_msa_features(
             msas=msas,
             deletion_matrices=deletion_matrices,
@@ -522,7 +577,7 @@ class DataPipeline:
         self,
         fasta_path: str,
         alignment_dir: str,
-        _alignment_index: Optional[str] = None,
+        alignment_index: Optional[str] = None,
     ) -> FeatureDict:
         """Assembles features for a single sequence in a FASTA file"""
         with open(fasta_path) as f:
@@ -534,7 +589,7 @@ class DataPipeline:
         input_description = input_descs[0]
         num_res = len(input_sequence)
 
-        hits = self._parse_template_hits(alignment_dir, _alignment_index)
+        hits = self._parse_template_hits(alignment_dir, alignment_index)
         template_features = make_template_features(
             input_sequence,
             hits,
@@ -558,7 +613,7 @@ class DataPipeline:
         mmcif: mmcif_parsing.MmcifObject,  # parsing is expensive, so no path
         alignment_dir: str,
         chain_id: Optional[str] = None,
-        _alignment_index: Optional[str] = None,
+        alignment_index: Optional[str] = None,
     ) -> FeatureDict:
         """
         Assembles features for a specific chain in an mmCIF object.
@@ -576,7 +631,7 @@ class DataPipeline:
         mmcif_feats = make_mmcif_features(mmcif, chain_id)
 
         input_sequence = mmcif.chain_to_seqres[chain_id]
-        hits = self._parse_template_hits(alignment_dir, _alignment_index)
+        hits = self._parse_template_hits(alignment_dir, alignment_index)
         template_features = make_template_features(
             input_sequence,
             hits,
@@ -597,7 +652,7 @@ class DataPipeline:
         is_distillation: bool = True,
         chain_id: Optional[str] = None,
         _structure_index: Optional[str] = None,
-        _alignment_index: Optional[str] = None,
+        alignment_index: Optional[str] = None,
     ) -> FeatureDict:
         """
         Assembles features for a protein in a PDB file.
@@ -610,7 +665,7 @@ class DataPipeline:
         description = os.path.splitext(os.path.basename(pdb_path))[0].upper()
         pdb_feats = make_pdb_features(protein_object, description, is_distillation)
 
-        hits = self._parse_template_hits(alignment_dir, _alignment_index)
+        hits = self._parse_template_hits(alignment_dir, alignment_index)
         template_features = make_template_features(
             input_sequence,
             hits,
@@ -627,7 +682,7 @@ class DataPipeline:
         self,
         core_path: str,
         alignment_dir: str,
-        _alignment_index: Optional[str] = None,
+        alignment_index: Optional[str] = None,
     ) -> FeatureDict:
         """
         Assembles features for a protein in a ProteinNet .core file.

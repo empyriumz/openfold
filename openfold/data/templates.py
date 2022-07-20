@@ -486,7 +486,7 @@ def _get_atom_positions(
     mmcif_object: mmcif_parsing.MmcifObject,
     auth_chain_id: str,
     max_ca_ca_distance: float,
-    _zero_center_positions: bool = True,
+    _zero_center_positions: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Gets atom positions and mask from a list of Biopython Residues."""
     coords_with_mask = mmcif_parsing.get_atom_coords(

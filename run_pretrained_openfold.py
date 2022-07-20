@@ -12,9 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import argparse
 import logging
+import math
 import numpy as np
 import os
 
@@ -22,8 +22,21 @@ import random
 import sys
 import time
 import torch
+import re
 
-from openfold.config import model_config
+torch_versions = torch.__version__.split(".")
+torch_major_version = int(torch_versions[0])
+torch_minor_version = int(torch_versions[1])
+if(
+    torch_major_version > 1 or 
+    (torch_major_version == 1 and torch_minor_version >= 12)
+):
+    # Gives a large speedup on Ampere-class GPUs
+    torch.set_float32_matmul_precision("high")
+
+torch.set_grad_enabled(False)
+
+from openfold.config import model_config, NUM_RES
 from openfold.data import templates, feature_pipeline, data_pipeline
 from openfold.model.model import AlphaFold
 from openfold.np import residue_constants, protein
@@ -34,7 +47,10 @@ from openfold.utils.import_weights import (
 from openfold.utils.tensor_utils import (
     tensor_tree_map,
 )
-
+from openfold.utils.trace_utils import (
+    pad_feature_dict_seq,
+    trace_model_,
+)
 from scripts.utils import add_data_args
 
 
@@ -125,6 +141,10 @@ def main(args):
         # Gather input sequences
         with open(args.fasta_path, "r") as fp:
             data = fp.read()
+    
+        tags, seqs = parse_fasta(data)
+        # assert len(tags) == len(set(tags)), "All FASTA tags must be unique"
+        tag = '-'.join(tags)
 
         lines = [
             l.replace("\n", "")

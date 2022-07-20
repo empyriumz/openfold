@@ -574,7 +574,8 @@ if __name__ == "__main__":
         help="Whether to train structure module only",
     )
     parser.add_argument(
-        "--_distillation_alignment_index_path", type=str, default=None,
+        "--distillation_alignment_index_path", type=str, default=None,
+        help="Distillation alignment index. See the README for instructions."
     )
     parser = pl.Trainer.add_argparse_args(parser)
 

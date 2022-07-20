@@ -82,9 +82,9 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         self.config = config
         self.treat_pdb_as_distillation = treat_pdb_as_distillation
         self.mode = mode
+        self.alignment_index = alignment_index
         self._output_raw = _output_raw
         self._structure_index = _structure_index
-        self._alignment_index = _alignment_index
 
         self.supported_exts = [".cif", ".core", ".pdb"]
 
@@ -162,7 +162,7 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         _alignment_index = None
         if self._alignment_index is not None:
             alignment_dir = self.alignment_dir
-            _alignment_index = self._alignment_index[name]
+            alignment_index = self.alignment_index[name]
 
         if self.mode == "train" or self.mode == "eval":
             spl = name.rsplit("_", 1)
@@ -193,8 +193,8 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
                     alignment_dir=alignment_dir,
                     is_distillation=self.treat_pdb_as_distillation,
                     chain_id=chain_id,
-                    _structure_index=self._structure_index[name],
-                    _alignment_index=_alignment_index,
+                    alignment_index=alignment_index,
+                    _structure_index=structure_index,
                 )
             else:
                raise ValueError("Extension branch missing") 
@@ -203,7 +203,7 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
             data = self.data_pipeline.process_fasta(
                 fasta_path=path,
                 alignment_dir=alignment_dir,
-                _alignment_index=_alignment_index,
+                alignment_index=alignment_index,
             )
 
         if self._output_raw:
@@ -545,10 +545,10 @@ class OpenFoldDataModule(pl.LightningDataModule):
             with open(_alignment_index_path, "r") as fp:
                 self._alignment_index = json.load(fp)
 
-        self._distillation_alignment_index = None
-        if(_distillation_alignment_index_path is not None):
-            with open(_distillation_alignment_index_path, "r") as fp:
-                self._distillation_alignment_index = json.load(fp)
+        self.distillation_alignment_index = None
+        if(distillation_alignment_index_path is not None):
+            with open(distillation_alignment_index_path, "r") as fp:
+                self.distillation_alignment_index = json.load(fp)
 
     def setup(self):
         # Most of the arguments are the same for the three datasets
@@ -571,7 +571,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
                 shuffle_top_k_prefiltered=self.config.train.shuffle_top_k_prefiltered,
                 treat_pdb_as_distillation=False,
                 mode="train",
-                _alignment_index=self._alignment_index,
+                alignment_index=self.alignment_index,
             )
 
             distillation_dataset = None
@@ -583,8 +583,8 @@ class OpenFoldDataModule(pl.LightningDataModule):
                     max_template_hits=self.config.train.max_template_hits,
                     treat_pdb_as_distillation=True,
                     mode="train",
+                    alignment_index=self.distillation_alignment_index,
                     _structure_index=self._distillation_structure_index,
-                    _alignment_index=self._distillation_alignment_index,
                 )
 
                 d_prob = self.config.train.distillation_prob
@@ -604,11 +604,18 @@ class OpenFoldDataModule(pl.LightningDataModule):
                     self.train_chain_data_cache_path,
                 ]
 
+            if(self.batch_seed is not None):
+                generator = torch.Generator()
+                # A standin for the rank, which I don't know how to get
+                pid = os.getpid() % 10000
+                generator = generator.manual_seed(self.batch_seed + pid)
+            
             self.train_dataset = OpenFoldDataset(
                 datasets=datasets,
                 probabilities=probabilities,
                 epoch_len=self.train_epoch_len,
                 chain_data_cache_paths=chain_data_cache_paths,
+                generator=generator,
                 _roll_at_init=False,
             )
 

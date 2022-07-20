@@ -43,9 +43,15 @@ def softmax_cross_entropy(logits, labels):
 
 
 def sigmoid_cross_entropy(logits, labels):
-    log_p = torch.log(torch.sigmoid(logits))
-    log_not_p = torch.log(torch.sigmoid(-logits))
-    loss = -labels * log_p - (1 - labels) * log_not_p
+    logits_dtype = logits.dtype
+    logits = logits.double()
+    labels = labels.double()
+    log_p = torch.nn.functional.logsigmoid(logits)
+    # log_p = torch.log(torch.sigmoid(logits))
+    log_not_p = torch.nn.functional.logsigmoid(-1 * logits)
+    # log_not_p = torch.log(torch.sigmoid(-logits))
+    loss = (-1. * labels) * log_p - (1. - labels) * log_not_p
+    loss = loss.to(dtype=logits_dtype)
     return loss
 
 
@@ -647,7 +653,9 @@ def compute_tm(
 
     normed_residue_mask = residue_weights / (eps + residue_weights.sum())
     per_alignment = torch.sum(predicted_tm_term * normed_residue_mask, dim=-1)
+
     weighted = per_alignment * residue_weights
+     
     argmax = (weighted == torch.max(weighted)).nonzero()[0]
     return per_alignment[tuple(argmax)]
 
@@ -1472,13 +1480,13 @@ def experimentally_resolved_loss(
     loss = torch.sum(errors * atom37_atom_exists, dim=-1)
     loss = loss / (eps + torch.sum(atom37_atom_exists, dim=(-1, -2)))
     loss = torch.sum(loss, dim=-1)
-
+    
     loss = loss * (
         (resolution >= min_resolution) & (resolution <= max_resolution)
     )
 
     loss = torch.mean(loss)
-
+ 
     return loss
 
 
@@ -1551,7 +1559,7 @@ class AlphaFoldLoss(nn.Module):
                 batch,
                 self.config.fape,
             ),
-            "lddt": lambda: lddt_loss(
+            "plddt_loss": lambda: lddt_loss(
                 logits=out["lddt_logits"],
                 all_atom_pred_pos=out["final_atom_positions"],
                 **{**batch, **self.config.lddt},
