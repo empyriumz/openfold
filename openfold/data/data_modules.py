@@ -34,10 +34,11 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         template_release_dates_cache_path: Optional[str] = None,
         shuffle_top_k_prefiltered: Optional[int] = None,
         treat_pdb_as_distillation: bool = True,
-        mapping_path: Optional[str] = None,
+        filter_path: Optional[str] = None,
         mode: str = "train", 
+        alignment_index: Optional[Any] = None,
         _output_raw: bool = False,
-        _alignment_index: Optional[Any] = None
+        _structure_index: Optional[Any] = None,
     ):
         """
             Args:
@@ -83,8 +84,11 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         self.config = config
         self.treat_pdb_as_distillation = treat_pdb_as_distillation
         self.mode = mode
+        self.alignment_index = alignment_index
         self._output_raw = _output_raw
-        self._alignment_index = _alignment_index
+        self._structure_index = _structure_index
+
+        self.supported_exts = [".cif", ".core", ".pdb"]
 
         valid_modes = ["train", "eval", "predict"]
         if(mode not in valid_modes):
@@ -96,14 +100,17 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
                 "scripts/generate_mmcif_cache.py before running OpenFold"
             )
 
-        if(_alignment_index is not None):
-            self._chain_ids = list(_alignment_index.keys())
-        elif(mapping_path is None):
-            self._chain_ids = list(os.listdir(alignment_dir))
+        if(alignment_index is not None):
+            self._chain_ids = list(alignment_index.keys())
         else:
-            with open(mapping_path, "r") as f:
-                self._chain_ids = [l.strip() for l in f.readlines()]
+            self._chain_ids = list(os.listdir(alignment_dir))
         
+        if(filter_path is not None):
+            with open(filter_path, "r") as f:
+                chains_to_include = [l.strip() for l in f.readlines()]
+
+            self._chain_ids = [c for c in self._chain_ids if c in chains_to_include]
+       
         self._chain_id_to_idx_dict = {
             chain: i for i, chain in enumerate(self._chain_ids)
         }
@@ -125,7 +132,7 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         if(not self._output_raw):
             self.feature_pipeline = feature_pipeline.FeaturePipeline(config) 
 
-    def _parse_mmcif(self, path, file_id, chain_id, alignment_dir, _alignment_index):
+    def _parse_mmcif(self, path, file_id, chain_id, alignment_dir, alignment_index):
         with open(path, 'r') as f:
             mmcif_string = f.read()
 
@@ -144,7 +151,7 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
             mmcif=mmcif_object,
             alignment_dir=alignment_dir,
             chain_id=chain_id,
-            _alignment_index=_alignment_index
+            alignment_index=alignment_index
         )
 
         return data
@@ -159,10 +166,10 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         name = self.idx_to_chain_id(idx)
         alignment_dir = os.path.join(self.alignment_dir, name)
 
-        _alignment_index = None
-        if(self._alignment_index is not None):
+        alignment_index = None
+        if(self.alignment_index is not None):
             alignment_dir = self.alignment_dir
-            _alignment_index = self._alignment_index[name]
+            alignment_index = self.alignment_index[name]
 
         if(self.mode == 'train' or self.mode == 'eval'):
             spl = name.rsplit('_', 1)
@@ -173,30 +180,51 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
                 chain_id = None
 
             path = os.path.join(self.data_dir, file_id)
-            if(os.path.exists(path + ".cif")):
+            structure_index_entry = None
+            if(self._structure_index is not None):
+                structure_index_entry = self._structure_index[name]
+                assert(len(structure_index_entry["files"]) == 1)
+                filename, _, _ = structure_index_entry["files"][0]
+                ext = os.path.splitext(filename)[1]
+            else:
+                ext = None
+                for e in self.supported_exts:
+                    if(os.path.exists(path + e)):
+                        ext = e
+                        break
+
+                if(ext is None):
+                    raise ValueError("Invalid file type")
+
+            path += ext
+            if(ext == ".cif"):
                 data = self._parse_mmcif(
-                    path + ".cif", file_id, chain_id, alignment_dir, _alignment_index,
+                    path, file_id, chain_id, alignment_dir, alignment_index,
                 )
-            elif(os.path.exists(path + ".core")):
+            elif(ext == ".core"):
                 data = self.data_pipeline.process_core(
-                    path + ".core", alignment_dir, _alignment_index,
+                    path, alignment_dir, alignment_index,
                 )
-            elif(os.path.exists(path + ".pdb")):
+            elif(ext == ".pdb"):
+                structure_index = None
+                if(self._structure_index is not None):
+                    structure_index = self._structure_index[name]
                 data = self.data_pipeline.process_pdb(
-                    pdb_path=path + ".pdb",
+                    pdb_path=path,
                     alignment_dir=alignment_dir,
                     is_distillation=self.treat_pdb_as_distillation,
                     chain_id=chain_id,
-                    _alignment_index=_alignment_index,
+                    alignment_index=alignment_index,
+                    _structure_index=structure_index,
                 )
             else:
-                raise ValueError("Invalid file type")
+               raise ValueError("Extension branch missing") 
         else:
             path = os.path.join(name, name + ".fasta")
             data = self.data_pipeline.process_fasta(
                 fasta_path=path,
                 alignment_dir=alignment_dir,
-                _alignment_index=_alignment_index,
+                alignment_index=alignment_index,
             )
 
         if(self._output_raw):
@@ -205,6 +233,8 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         feats = self.feature_pipeline.process_features(
             data, self.mode 
         )
+
+        feats["batch_idx"] = torch.tensor([idx for _ in range(feats["aatype"].shape[-1])], dtype=torch.int64, device=feats["aatype"].device)
 
         return feats
 
@@ -359,20 +389,9 @@ class OpenFoldDataset(torch.utils.data.Dataset):
 
 
 class OpenFoldBatchCollator:
-    def __init__(self, config, stage="train"):
-        self.stage = stage
-        self.feature_pipeline = feature_pipeline.FeaturePipeline(config)
-
-    def __call__(self, raw_prots):
-        processed_prots = []
-        for prot in raw_prots:
-            features = self.feature_pipeline.process_features(
-                prot, self.stage
-            )
-            processed_prots.append(features)
-
+    def __call__(self, prots):
         stack_fn = partial(torch.stack, dim=0)
-        return dict_multimap(stack_fn, processed_prots) 
+        return dict_multimap(stack_fn, prots) 
 
 
 class OpenFoldDataLoader(torch.utils.data.DataLoader):
@@ -484,13 +503,15 @@ class OpenFoldDataModule(pl.LightningDataModule):
         predict_data_dir: Optional[str] = None,
         predict_alignment_dir: Optional[str] = None,
         kalign_binary_path: str = '/usr/bin/kalign',
-        train_mapping_path: Optional[str] = None,
-        distillation_mapping_path: Optional[str] = None,
+        train_filter_path: Optional[str] = None,
+        distillation_filter_path: Optional[str] = None,
         obsolete_pdbs_file_path: Optional[str] = None,
         template_release_dates_cache_path: Optional[str] = None,
         batch_seed: Optional[int] = None,
         train_epoch_len: int = 50000, 
-        _alignment_index_path: Optional[str] = None,
+        _distillation_structure_index_path: Optional[str] = None,
+        alignment_index_path: Optional[str] = None,
+        distillation_alignment_index_path: Optional[str] = None,
         **kwargs
     ):
         super(OpenFoldDataModule, self).__init__()
@@ -511,8 +532,8 @@ class OpenFoldDataModule(pl.LightningDataModule):
         self.predict_data_dir = predict_data_dir
         self.predict_alignment_dir = predict_alignment_dir
         self.kalign_binary_path = kalign_binary_path
-        self.train_mapping_path = train_mapping_path
-        self.distillation_mapping_path = distillation_mapping_path
+        self.train_filter_path = train_filter_path
+        self.distillation_filter_path = distillation_filter_path
         self.template_release_dates_cache_path = (
             template_release_dates_cache_path
         )
@@ -543,10 +564,20 @@ class OpenFoldDataModule(pl.LightningDataModule):
         )
 
         # An ad-hoc measure for our particular filesystem restrictions
-        self._alignment_index = None
-        if(_alignment_index_path is not None):
-            with open(_alignment_index_path, "r") as fp:
-                self._alignment_index = json.load(fp)
+        self._distillation_structure_index = None
+        if(_distillation_structure_index_path is not None):
+            with open(_distillation_structure_index_path, "r") as fp:
+                self._distillation_structure_index = json.load(fp)
+        
+        self.alignment_index = None
+        if(alignment_index_path is not None):
+            with open(alignment_index_path, "r") as fp:
+                self.alignment_index = json.load(fp)
+
+        self.distillation_alignment_index = None
+        if(distillation_alignment_index_path is not None):
+            with open(distillation_alignment_index_path, "r") as fp:
+                self.distillation_alignment_index = json.load(fp)
 
     def setup(self):
         # Most of the arguments are the same for the three datasets 
@@ -565,14 +596,13 @@ class OpenFoldDataModule(pl.LightningDataModule):
             train_dataset = dataset_gen(
                 data_dir=self.train_data_dir,
                 alignment_dir=self.train_alignment_dir,
-                mapping_path=self.train_mapping_path,
+                filter_path=self.train_filter_path,
                 max_template_hits=self.config.train.max_template_hits,
                 shuffle_top_k_prefiltered=
                     self.config.train.shuffle_top_k_prefiltered,
                 treat_pdb_as_distillation=False,
                 mode="train",
-                _output_raw=True,
-                _alignment_index=self._alignment_index,
+                alignment_index=self.alignment_index,
             )
 
             distillation_dataset = None
@@ -580,11 +610,12 @@ class OpenFoldDataModule(pl.LightningDataModule):
                 distillation_dataset = dataset_gen(
                     data_dir=self.distillation_data_dir,
                     alignment_dir=self.distillation_alignment_dir,
-                    mapping_path=self.distillation_mapping_path,
-                    max_template_hits=self.train.max_template_hits,
+                    filter_path=self.distillation_filter_path,
+                    max_template_hits=self.config.train.max_template_hits,
                     treat_pdb_as_distillation=True,
                     mode="train",
-                    _output_raw=True,
+                    alignment_index=self.distillation_alignment_index,
+                    _structure_index=self._distillation_structure_index,
                 )
 
                 d_prob = self.config.train.distillation_prob
@@ -592,7 +623,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
             if(distillation_dataset is not None):
                 datasets = [train_dataset, distillation_dataset]
                 d_prob = self.config.train.distillation_prob
-                probabilities = [1 - d_prob, d_prob]
+                probabilities = [1. - d_prob, d_prob]
                 chain_data_cache_paths = [
                     self.train_chain_data_cache_path,
                     self.distillation_chain_data_cache_path,
@@ -604,11 +635,16 @@ class OpenFoldDataModule(pl.LightningDataModule):
                     self.train_chain_data_cache_path,
                 ]
 
+            if(self.batch_seed is not None):
+                generator = torch.Generator()
+                generator = generator.manual_seed(self.batch_seed + 1)
+            
             self.train_dataset = OpenFoldDataset(
                 datasets=datasets,
                 probabilities=probabilities,
                 epoch_len=self.train_epoch_len,
                 chain_data_cache_paths=chain_data_cache_paths,
+                generator=generator,
                 _roll_at_init=False,
             )
     
@@ -616,10 +652,9 @@ class OpenFoldDataModule(pl.LightningDataModule):
                 self.eval_dataset = dataset_gen(
                     data_dir=self.val_data_dir,
                     alignment_dir=self.val_alignment_dir,
-                    mapping_path=None,
+                    filter_path=None,
                     max_template_hits=self.config.eval.max_template_hits,
                     mode="eval",
-                    _output_raw=True,
                 )
             else:
                 self.eval_dataset = None
@@ -627,7 +662,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
             self.predict_dataset = dataset_gen(
                 data_dir=self.predict_data_dir,
                 alignment_dir=self.predict_alignment_dir,
-                mapping_path=None,
+                filter_path=None,
                 max_template_hits=self.config.predict.max_template_hits,
                 mode="predict",
             )
@@ -640,7 +675,6 @@ class OpenFoldDataModule(pl.LightningDataModule):
         dataset = None
         if(stage == "train"):
             dataset = self.train_dataset
-            
             # Filter the dataset, if necessary
             dataset.reroll()
         elif(stage == "eval"):
@@ -650,7 +684,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
         else:
             raise ValueError("Invalid stage")
 
-        batch_collator = OpenFoldBatchCollator(self.config, stage)
+        batch_collator = OpenFoldBatchCollator()
 
         dl = OpenFoldDataLoader(
             dataset,

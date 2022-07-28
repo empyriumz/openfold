@@ -52,14 +52,14 @@ class Param:
     stacked: bool = False
 
 
-def _process_translations_dict(d, top_layer=True):
+def process_translation_dict(d, top_layer=True):
     flat = {}
     for k, v in d.items():
         if type(v) == dict:
             prefix = _NPZ_KEY_PREFIX if top_layer else ""
             sub_flat = {
                 (prefix + "/".join([k, k_prime])): v_prime
-                for k_prime, v_prime in _process_translations_dict(
+                for k_prime, v_prime in process_translation_dict(
                     v, top_layer=False
                 ).items()
             }
@@ -122,9 +122,7 @@ def assign(translation_dict, orig_weights):
                 raise
 
 
-def import_jax_weights_(model, npz_path, version="model_1"):
-    data = np.load(npz_path)
-
+def generate_translation_dict(model, version):
     #######################
     # Some templates
     #######################
@@ -324,11 +322,6 @@ def import_jax_weights_(model, npz_path, version="model_1"):
     # translations dict overflow
     ############################
 
-    tps_blocks = model.template_pair_stack.blocks
-    tps_blocks_params = stacked(
-        [TemplatePairBlockParams(b) for b in tps_blocks]
-    )
-
     ems_blocks = model.extra_msa_stack.blocks
     ems_blocks_params = stacked([ExtraMSABlockParams(b) for b in ems_blocks])
 
@@ -351,30 +344,10 @@ def import_jax_weights_(model, npz_path, version="model_1"):
             "pair_activiations": LinearParams(
                 model.input_embedder.linear_relpos
             ),
-            "template_embedding": {
-                "single_template_embedding": {
-                    "embedding2d": LinearParams(
-                        model.template_pair_embedder.linear
-                    ),
-                    "template_pair_stack": {
-                        "__layer_stack_no_state": tps_blocks_params,
-                    },
-                    "output_layer_norm": LayerNormParams(
-                        model.template_pair_stack.layer_norm
-                    ),
-                },
-                "attention": AttentionParams(model.template_pointwise_att.mha),
-            },
             "extra_msa_activations": LinearParams(
                 model.extra_msa_embedder.linear
             ),
             "extra_msa_stack": ems_blocks_params,
-            "template_single_embedding": LinearParams(
-                model.template_angle_embedder.linear_1
-            ),
-            "template_projection": LinearParams(
-                model.template_angle_embedder.linear_2
-            ),
             "evoformer_iteration": evo_blocks_params,
             "single_activations": LinearParams(model.evoformer.linear),
         },
@@ -419,20 +392,53 @@ def import_jax_weights_(model, npz_path, version="model_1"):
         "model_4_ptm",
         "model_5_ptm",
     ]
-    if version in no_templ:
-        evo_dict = translations["evoformer"]
-        keys = list(evo_dict.keys())
-        for k in keys:
-            if "template_" in k:
-                evo_dict.pop(k)
+
+    if version not in no_templ:
+        tps_blocks = model.template_pair_stack.blocks
+        tps_blocks_params = stacked(
+            [TemplatePairBlockParams(b) for b in tps_blocks]
+        ) 
+        template_param_dict = {
+            "template_embedding": {
+                "single_template_embedding": {
+                    "embedding2d": LinearParams(
+                        model.template_pair_embedder.linear
+                    ),
+                    "template_pair_stack": {
+                        "__layer_stack_no_state": tps_blocks_params,
+                    },
+                    "output_layer_norm": LayerNormParams(
+                        model.template_pair_stack.layer_norm
+                    ),
+                },
+                "attention": AttentionParams(model.template_pointwise_att.mha),
+            },
+            "template_single_embedding": LinearParams(
+                model.template_angle_embedder.linear_1
+            ),
+            "template_projection": LinearParams(
+                model.template_angle_embedder.linear_2
+            ),
+        }
+        
+        translations["evoformer"].update(template_param_dict)   
 
     if "_ptm" in version:
         translations["predicted_aligned_error_head"] = {
             "logits": LinearParams(model.aux_heads.tm.linear)
         }
 
+
+    return translations
+
+
+def import_jax_weights_(model, npz_path, version="model_1"):
+    data = np.load(npz_path)
+
+    translations = generate_translation_dict(model, version)
+
     # Flatten keys and insert missing key prefixes
-    flat = _process_translations_dict(translations)
+    flat = process_translation_dict(translations)
 
     # Sanity check
     keys = list(data.keys())
