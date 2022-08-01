@@ -541,7 +541,7 @@ if __name__ == "__main__":
         help="Whether to save all model outputs, including embeddings, etc."
     )
     parser.add_argument(
-        "--cpus", type=int, default=4,
+        "--cpus", type=int, default=8,
         help="""Number of CPUs with which to run alignment tools"""
     )
     parser.add_argument(

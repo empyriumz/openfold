@@ -38,8 +38,8 @@ except ImportError:
     # openmm < 7.6 (requires DeepMind patch)
     from simtk import openmm
     from simtk import unit
-    from simtk.openmm import app as openmm_app
-    from simtk.openmm.app.internal.pdbstructure import PdbStructure
+    from openmm import app as openmm_app
+    from openmm.app.internal.pdbstructure import PdbStructure
 
 ENERGY = unit.kilocalories_per_mole
 LENGTH = unit.angstroms
