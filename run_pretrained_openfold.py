@@ -119,7 +119,7 @@ def run_model(model, batch, tag, args):
         t = time.perf_counter()
         out = model(batch)
         inference_time = time.perf_counter() - t
-        logger.info(f"Inference time: {inference_time}")
+        logger.info("Inference time: {:.2f}".format(inference_time))
    
         model.config.template.enabled = template_enabled
 
@@ -333,65 +333,72 @@ def list_files_with_extensions(dir, extensions):
 def main(args):
     # Create the output directory
     os.makedirs(args.output_dir, exist_ok=True)
+    model_list = ["model_1"]
+    best_plddt = 0
+    for model_name in model_list:
+        config = model_config(model_name)
+        model = AlphaFold(config)
+        model = model.to(args.model_device)
+        model = model.eval()
+        
+        prediction_dir = os.path.join(args.output_dir, model_name)
+        os.makedirs(prediction_dir, exist_ok=True)
+        if(args.trace_model):
+            if(not config.data.predict.fixed_size):
+                raise ValueError(
+                    "Tracing requires that fixed_size mode be enabled in the config"
+                )
+        
+        template_featurizer = templates.TemplateHitFeaturizer(
+            mmcif_dir=args.template_mmcif_dir,
+            max_template_date=args.max_template_date,
+            max_hits=config.data.predict.max_templates,
+            kalign_binary_path=args.kalign_binary_path,
+            release_dates_path=args.release_dates_path,
+            obsolete_pdbs_path=args.obsolete_pdbs_path
+        )
 
-    config = model_config(args.config_preset)
+        data_processor = data_pipeline.DataPipeline(
+            template_featurizer=template_featurizer,
+        )
+
+        output_dir_base = args.output_dir
+        random_seed = args.data_random_seed
+        if random_seed is None:
+            random_seed = random.randrange(2**32)
+        
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed + 1)
     
-    if(args.trace_model):
-        if(not config.data.predict.fixed_size):
-            raise ValueError(
-                "Tracing requires that fixed_size mode be enabled in the config"
-            )
-    
-    template_featurizer = templates.TemplateHitFeaturizer(
-        mmcif_dir=args.template_mmcif_dir,
-        max_template_date=args.max_template_date,
-        max_hits=config.data.predict.max_templates,
-        kalign_binary_path=args.kalign_binary_path,
-        release_dates_path=args.release_dates_path,
-        obsolete_pdbs_path=args.obsolete_pdbs_path
-    )
+        feature_processor = feature_pipeline.FeaturePipeline(config.data)
+        if not os.path.exists(output_dir_base):
+            os.makedirs(output_dir_base)
+        if args.use_precomputed_alignments is None:
+            alignment_dir = os.path.join(output_dir_base, "alignments")
+        else:
+            alignment_dir = args.use_precomputed_alignments
 
-    data_processor = data_pipeline.DataPipeline(
-        template_featurizer=template_featurizer,
-    )
+        tag_list = []
+        seq_list = []
+        for fasta_file in list_files_with_extensions(args.fasta_dir, (".fasta", ".fa")):
+            # Gather input sequences
+            with open(os.path.join(args.fasta_dir, fasta_file), "r") as fp:
+                data = fp.read()
+        
+            tags, seqs = parse_fasta(data)
+            # assert len(tags) == len(set(tags)), "All FASTA tags must be unique"
+            tag = '-'.join(tags)
 
-    output_dir_base = args.output_dir
-    random_seed = args.data_random_seed
-    if random_seed is None:
-        random_seed = random.randrange(2**32)
-    
-    np.random.seed(random_seed)
-    torch.manual_seed(random_seed + 1)
-    
-    feature_processor = feature_pipeline.FeaturePipeline(config.data)
-    if not os.path.exists(output_dir_base):
-        os.makedirs(output_dir_base)
-    if args.use_precomputed_alignments is None:
-        alignment_dir = os.path.join(output_dir_base, "alignments")
-    else:
-        alignment_dir = args.use_precomputed_alignments
+            tag_list.append((tag, tags))
+            seq_list.append(seqs)
 
-    tag_list = []
-    seq_list = []
-    for fasta_file in list_files_with_extensions(args.fasta_dir, (".fasta", ".fa")):
-        # Gather input sequences
-        with open(os.path.join(args.fasta_dir, fasta_file), "r") as fp:
-            data = fp.read()
-    
-        tags, seqs = parse_fasta(data)
-        # assert len(tags) == len(set(tags)), "All FASTA tags must be unique"
-        tag = '-'.join(tags)
-
-        tag_list.append((tag, tags))
-        seq_list.append(seqs)
-
-    seq_sort_fn = lambda target: sum([len(s) for s in target[1]])
-    sorted_targets = sorted(zip(tag_list, seq_list), key=seq_sort_fn)
-    feature_dicts = {}
-    for model, output_directory in load_models_from_command_line(args, config): 
+        seq_sort_fn = lambda target: sum([len(s) for s in target[1]])
+        sorted_targets = sorted(zip(tag_list, seq_list), key=seq_sort_fn)
+        feature_dicts = {}
+    # for model, output_directory in load_models_from_command_line(args, config): 
         cur_tracing_interval = 0
         for (tag, tags), seqs in sorted_targets:
-            output_name = f'{tag}_{args.config_preset}'
+            output_name = f'{tag}_{model_name}'
             if args.output_postfix is not None:
                 output_name = f'{output_name}_{args.output_postfix}'
     
@@ -447,7 +454,8 @@ def main(args):
                 processed_feature_dict
             )
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
-
+            mean_plddt = np.mean(out["plddt"])
+            logger.info("Mean plddt for {}: {:.2f}".format(model_name, mean_plddt))
             unrelaxed_protein = prep_output(
                 out, 
                 processed_feature_dict, 
@@ -455,50 +463,61 @@ def main(args):
                 feature_processor, 
                 args
             )
-
             unrelaxed_output_path = os.path.join(
-                output_directory, f'{output_name}_unrelaxed.pdb'
-            )
+        prediction_dir, f'{output_name}_unrelaxed.pdb'
+    )
 
             with open(unrelaxed_output_path, 'w') as fp:
                 fp.write(protein.to_pdb(unrelaxed_protein))
 
             logger.info(f"Output written to {unrelaxed_output_path}...")
-            
-            if not args.skip_relaxation:
-                amber_relaxer = relax.AmberRelaxation(
-                    use_gpu=(args.model_device != "cpu"),
-                    **config.relax,
-                )
-
-                # Relax the prediction.
-                logger.info(f"Running relaxation on {unrelaxed_output_path}...")
-                t = time.perf_counter()
-                visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
-                if "cuda" in args.model_device:
-                    device_no = args.model_device.split(":")[-1]
-                    os.environ["CUDA_VISIBLE_DEVICES"] = device_no
-                relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
-                os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
-                logger.info(f"Relaxation time: {time.perf_counter() - t}")
-
-                # Save the relaxed PDB.
-                relaxed_output_path = os.path.join(
-                    output_directory, f'{output_name}_relaxed.pdb'
-                )
-                with open(relaxed_output_path, 'w') as fp:
-                    fp.write(relaxed_pdb_str)
+            if mean_plddt > best_plddt:
+                best_plddt = mean_plddt
+                best_protein = unrelaxed_protein
+            #     best_protein = prep_output(
+            #     out, 
+            #     processed_feature_dict, 
+            #     feature_dict, 
+            #     feature_processor, 
+            #     args
+            # )
                 
-                logger.info(f"Relaxed output written to {relaxed_output_path}...")
 
-            if args.save_outputs:
-                output_dict_path = os.path.join(
-                    output_directory, f'{output_name}_output_dict.pkl'
-                )
-                with open(output_dict_path, "wb") as fp:
-                    pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-                logger.info(f"Model output written to {output_dict_path}...")
+    if not args.skip_relaxation:
+        amber_relaxer = relax.AmberRelaxation(
+            use_gpu=(args.model_device != "cpu"),
+            **config.relax,
+        )
+
+        # Relax the prediction.
+        logger.info(f"Running relaxation on the best models")
+        t = time.perf_counter()
+        visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
+        if "cuda" in args.model_device:
+            device_no = args.model_device.split(":")[-1]
+            os.environ["CUDA_VISIBLE_DEVICES"] = device_no
+        relaxed_pdb_str, _, _ = amber_relaxer.process(prot=best_protein)
+        os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
+        logger.info("Relaxation time: {:.2f}".format(time.perf_counter() - t))
+
+        # Save the relaxed PDB.
+        relaxed_output_path = os.path.join(
+            prediction_dir, '{}_{:.2f}_relaxed.pdb'.format(output_name, best_plddt)
+        )
+        with open(relaxed_output_path, 'w') as fp:
+            fp.write(relaxed_pdb_str)
+
+        logger.info(f"Relaxed output written to {relaxed_output_path}...")
+
+    if args.save_outputs:
+        output_dict_path = os.path.join(
+            prediction_dir, f'{output_name}_output_dict.pkl'
+        )
+        with open(output_dict_path, "wb") as fp:
+            pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+        logger.info(f"Model output written to {output_dict_path}...")
 
 
 if __name__ == "__main__":
@@ -581,7 +600,7 @@ if __name__ == "__main__":
 
     if(args.jax_param_path is None and args.openfold_checkpoint_path is None):
         args.jax_param_path = os.path.join(
-            "openfold", "resources", "params", 
+            "/hpcgpfs01/scratch/xdai/openfold/params", 
             "params_" + args.config_preset + ".npz"
         )
 
