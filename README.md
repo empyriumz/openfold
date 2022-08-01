@@ -292,10 +292,10 @@ per line (e.g. [PDB40](https://cdn.rcsb.org/resources/sequence/clusters/clusters
 Finally, call the training script:
 
 ```bash
-python3 train_openfold.py mmcif_dir/ alignment_dir/ template_mmcif_dir/ \
+python3 train_openfold.py mmcif_dir/ alignment_dir/ template_mmcif_dir/ output_dir/ \
     2021-10-10 \ 
     --template_release_dates_cache_path mmcif_cache.json \ 
-    --precision 16 \
+    --precision bf16 \
     --gpus 8 --replace_sampler_ddp=True \
     --seed 42 \ # in multi-gpu settings, the seed must be specified
     --deepspeed_config_path deepspeed_config.json \

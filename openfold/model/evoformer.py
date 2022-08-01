@@ -257,6 +257,7 @@ class EvoformerBlockCore(nn.Module):
                     z, 
                     mask=pair_mask, 
                     chunk_size=_attn_chunk_size, 
+                    use_memory_efficient_kernel=False,
                     use_lma=use_lma,
                     inplace_safe=inplace_safe,
                 )
@@ -275,6 +276,7 @@ class EvoformerBlockCore(nn.Module):
                     z,
                     mask=pair_mask.transpose(-1, -2),
                     chunk_size=_attn_chunk_size,
+                    use_memory_efficient_kernel=False,
                     use_lma=use_lma,
                     inplace_safe=inplace_safe,
                 )
@@ -386,6 +388,7 @@ class EvoformerBlock(nn.Module):
                     z=z, 
                     mask=msa_mask, 
                     chunk_size=_attn_chunk_size,
+                    use_memory_efficient_kernel=False,
                     use_lma=use_lma,
                 )
             ),
@@ -721,6 +724,7 @@ class EvoformerStack(nn.Module):
         pair_mask: torch.Tensor,
         chunk_size: int,
         use_lma: bool = False,
+        use_flash: bool = False,
         _mask_trans: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert(not (self.training or torch.is_grad_enabled()))
@@ -731,6 +735,7 @@ class EvoformerStack(nn.Module):
             z=input_tensors[1],
             chunk_size=chunk_size,
             use_lma=use_lma,
+            use_flash=use_flash,
             msa_mask=msa_mask,
             pair_mask=pair_mask,
             inplace_safe=True,

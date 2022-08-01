@@ -107,7 +107,7 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         
         if(filter_path is not None):
             with open(filter_path, "r") as f:
-                chains_to_include = [l.strip() for l in f.readlines()]
+                chains_to_include = set([l.strip() for l in f.readlines()])
 
             self._chain_ids = [c for c in self._chain_ids if c in chains_to_include]
        
@@ -635,6 +635,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
                     self.train_chain_data_cache_path,
                 ]
 
+            generator = None
             if(self.batch_seed is not None):
                 generator = torch.Generator()
                 generator = generator.manual_seed(self.batch_seed + 1)
