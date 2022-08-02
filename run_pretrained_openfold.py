@@ -340,9 +340,6 @@ def main(args):
         )
         import_jax_weights_(model, npz_path, version=model_name)
         model = model.to(args.model_device)
-
-        prediction_dir = os.path.join(args.output_dir, model_name)
-        os.makedirs(prediction_dir, exist_ok=True)
         if args.trace_model:
             if not config.data.predict.fixed_size:
                 raise ValueError(
@@ -398,10 +395,6 @@ def main(args):
         # for model, output_directory in load_models_from_command_line(args, config):
         cur_tracing_interval = 0
         for (tag, tags), seqs in sorted_targets:
-            output_name = f"{tag}_{model_name}"
-            if args.output_postfix is not None:
-                output_name = f"{output_name}_{args.output_postfix}"
-
             # Does nothing if the alignments have already been computed
             precompute_alignments(tags, seqs, alignment_dir, args)
 
@@ -461,7 +454,7 @@ def main(args):
             #     args
             # )
             #         unrelaxed_output_path = os.path.join(
-            #     prediction_dir, f'{output_name}_unrelaxed.pdb'
+            #     args.output_dir, f'{output_name}_unrelaxed.pdb'
             # )
 
             #         with open(unrelaxed_output_path, 'w') as fp:
@@ -474,6 +467,9 @@ def main(args):
                 best_protein = prep_output(
                     out, processed_feature_dict, feature_dict, feature_processor, args
                 )
+                output_name = f"{tag}_{model_name}"
+                if args.output_postfix is not None:
+                    output_name = f"{output_name}_{args.output_postfix}"
 
     if not args.skip_relaxation:
         amber_relaxer = relax.AmberRelaxation(
@@ -494,7 +490,7 @@ def main(args):
 
         # Save the relaxed PDB.
         relaxed_output_path = os.path.join(
-            prediction_dir, "{}_{:.2f}_relaxed.pdb".format(output_name, best_plddt)
+            args.output_dir, "{}_{:.2f}_relaxed.pdb".format(output_name, best_plddt)
         )
         with open(relaxed_output_path, "w") as fp:
             fp.write(relaxed_pdb_str)
@@ -503,7 +499,7 @@ def main(args):
 
     if args.save_outputs:
         output_dict_path = os.path.join(
-            prediction_dir, f"{output_name}_output_dict.pkl"
+            args.output_dir, f"{output_name}_output_dict.pkl"
         )
         with open(output_dict_path, "wb") as fp:
             pickle.dump(out, fp, protocol=pickle.HIGHEST_PROTOCOL)
