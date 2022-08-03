@@ -57,7 +57,7 @@ class OpenFoldWrapper(pl.LightningModule):
         self.ema = ExponentialMovingAverage(model=self.model, decay=config.ema.decay)
 
         self.cached_weights = None
-        self.last_lr_step = 0
+        self.last_lr_step = -1
 
     def forward(self, batch):
         return self.model(batch)
@@ -225,6 +225,9 @@ class OpenFoldWrapper(pl.LightningModule):
 
     def on_save_checkpoint(self, checkpoint):
         checkpoint["ema"] = self.ema.state_dict()
+
+    def resume_last_lr_step(self, lr_step):
+        self.last_lr_step = lr_step
 
 
 def main(args):

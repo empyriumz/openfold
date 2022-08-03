@@ -18,6 +18,8 @@ import subprocess
 
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CUDA_HOME
 
+from scripts.utils import get_nvidia_cc
+
 
 version_dependent_macros = [
     "-DVERSION_GE_1_1",
@@ -102,3 +104,6 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
 )
+
+
+
