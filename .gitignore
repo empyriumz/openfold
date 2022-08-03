@@ -1,6 +1,7 @@
 openfold/resources/
 alignments/
 tmp/
+precomputed_alignments/
 input_mmcif/
 train_output/
 *.pdb
