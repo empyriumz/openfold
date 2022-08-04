@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import argparse
-from copy import deepcopy
-from datetime import date
 import logging
 import math
 import numpy as np
@@ -29,7 +27,6 @@ from pytorch_lightning.utilities.deepspeed import (
     convert_zero_checkpoint_to_fp32_state_dict,
 )
 import random
-import sys
 import time
 import torch
 import re
@@ -43,7 +40,7 @@ if torch_major_version > 1 or (torch_major_version == 1 and torch_minor_version 
 
 torch.set_grad_enabled(False)
 
-from openfold.config import model_config, NUM_RES
+from openfold.config import model_config
 from openfold.data import templates, feature_pipeline, data_pipeline
 from openfold.model.model import AlphaFold
 from openfold.model.torchscript import script_preset_
@@ -345,15 +342,18 @@ def main(args):
                 raise ValueError(
                     "Tracing requires that fixed_size mode be enabled in the config"
                 )
-
-        template_featurizer = templates.TemplateHitFeaturizer(
-            mmcif_dir=args.template_mmcif_dir,
-            max_template_date=args.max_template_date,
-            max_hits=config.data.predict.max_templates,
-            kalign_binary_path=args.kalign_binary_path,
-            release_dates_path=args.release_dates_path,
-            obsolete_pdbs_path=args.obsolete_pdbs_path,
-        )
+        if args.custom_template is None:
+            template_featurizer = templates.TemplateHitFeaturizer(
+                mmcif_dir=args.template_mmcif_dir,
+                max_template_date=args.max_template_date,
+                max_hits=config.data.predict.max_templates,
+                kalign_binary_path=args.kalign_binary_path,
+                release_dates_path=args.release_dates_path,
+                obsolete_pdbs_path=args.obsolete_pdbs_path,
+            )
+        else:
+            logger.info("Use custom template")
+            template_featurizer = None
 
         data_processor = data_pipeline.DataPipeline(
             template_featurizer=template_featurizer,
@@ -406,6 +406,10 @@ def main(args):
                     alignment_dir,
                     data_processor,
                     args,
+                )
+            if args.custom_template is not None:
+                feature_dict = templates.single_template_process(
+                    feature_dict, args.custom_template
                 )
 
                 if args.trace_model:
@@ -558,6 +562,12 @@ if __name__ == "__main__":
         default=None,
         help="""Path to OpenFold checkpoint. Can be either a DeepSpeed 
              checkpoint directory or a .pt file""",
+    )
+    parser.add_argument(
+        "--custom_template",
+        type=str,
+        default=None,
+        help="""Using custom template for the inference.""",
     )
     parser.add_argument(
         "--save_outputs",
