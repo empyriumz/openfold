@@ -1,4 +1,3 @@
-# Copyright 2021 AlQuraishi Laboratory
 # Copyright 2021 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,19 +15,13 @@
 """Parses the mmCIF file format."""
 import collections
 import dataclasses
+import functools
 import io
-import json
-import logging
-import os
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
+from absl import logging
 from Bio import PDB
 from Bio.Data import SCOPData
-import numpy as np
-
-from openfold.data.errors import MultipleChainsError
-import openfold.np.residue_constants as residue_constants
-
 
 # Type aliases:
 ChainId = str
@@ -173,6 +166,7 @@ def mmcif_loop_to_dict(
     return {entry[index]: entry for entry in entries}
 
 
+@functools.lru_cache(16, typed=False)
 def parse(
     *, file_id: str, mmcif_string: str, catch_all_errors: bool = True
 ) -> ParsingResult:
@@ -266,10 +260,7 @@ def parse(
             for idx, monomer in enumerate(seq_info):
                 if idx not in current_mapping:
                     current_mapping[idx] = ResidueAtPosition(
-                        position=None,
-                        name=monomer.id,
-                        is_missing=True,
-                        hetflag=" ",
+                        position=None, name=monomer.id, is_missing=True, hetflag=" "
                     )
 
         author_chain_to_sequence = {}
@@ -342,7 +333,7 @@ def _get_header(parsed_info: MmCIFDict) -> PdbHeader:
                 raw_resolution = parsed_info[res_key][0]
                 header["resolution"] = float(raw_resolution)
             except ValueError:
-                logging.info("Invalid resolution format: %s", parsed_info[res_key])
+                logging.debug("Invalid resolution format: %s", parsed_info[res_key])
 
     return header
 
@@ -421,57 +412,3 @@ def _get_protein_chains(
 def _is_set(data: str) -> bool:
     """Returns False if data is a special mmCIF character indicating 'unset'."""
     return data not in (".", "?")
-
-
-def get_atom_coords(
-    mmcif_object: MmcifObject, chain_id: str, _zero_center_positions: bool = False
-) -> Tuple[np.ndarray, np.ndarray]:
-    # Locate the right chain
-    chains = list(mmcif_object.structure.get_chains())
-    relevant_chains = [c for c in chains if c.id == chain_id]
-    if len(relevant_chains) != 1:
-        raise MultipleChainsError(
-            f"Expected exactly one chain in structure with id {chain_id}."
-        )
-    chain = relevant_chains[0]
-
-    # Extract the coordinates
-    num_res = len(mmcif_object.chain_to_seqres[chain_id])
-    all_atom_positions = np.zeros(
-        [num_res, residue_constants.atom_type_num, 3], dtype=np.float32
-    )
-    all_atom_mask = np.zeros(
-        [num_res, residue_constants.atom_type_num], dtype=np.float32
-    )
-    for res_index in range(num_res):
-        pos = np.zeros([residue_constants.atom_type_num, 3], dtype=np.float32)
-        mask = np.zeros([residue_constants.atom_type_num], dtype=np.float32)
-        res_at_position = mmcif_object.seqres_to_structure[chain_id][res_index]
-        if not res_at_position.is_missing:
-            res = chain[
-                (
-                    res_at_position.hetflag,
-                    res_at_position.position.residue_number,
-                    res_at_position.position.insertion_code,
-                )
-            ]
-            for atom in res.get_atoms():
-                atom_name = atom.get_name()
-                x, y, z = atom.get_coord()
-                if atom_name in residue_constants.atom_order.keys():
-                    pos[residue_constants.atom_order[atom_name]] = [x, y, z]
-                    mask[residue_constants.atom_order[atom_name]] = 1.0
-                elif atom_name.upper() == "SE" and res.get_resname() == "MSE":
-                    # Put the coords of the selenium atom in the sulphur column
-                    pos[residue_constants.atom_order["SD"]] = [x, y, z]
-                    mask[residue_constants.atom_order["SD"]] = 1.0
-
-        all_atom_positions[res_index] = pos
-        all_atom_mask[res_index] = mask
-
-    if _zero_center_positions:
-        binary_mask = all_atom_mask.astype(bool)
-        translation_vec = all_atom_positions[binary_mask].mean(axis=0)
-        all_atom_positions[binary_mask] -= translation_vec
-
-    return all_atom_positions, all_atom_mask

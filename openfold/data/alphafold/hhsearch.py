@@ -21,8 +21,8 @@ from typing import Sequence
 
 from absl import logging
 
-from openfold.data import parsers
-from openfold.data.tools import utils
+from openfold.data.alphafold import parsers
+from openfold.data.alphafold import utils
 
 # Internal import (7716).
 

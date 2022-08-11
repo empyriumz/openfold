@@ -326,7 +326,10 @@ def list_files_with_extensions(dir, extensions):
 def main(args):
     # Create the output directory
     os.makedirs(args.output_dir, exist_ok=True)
-    model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    if args.custom_template is None:
+        model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    else:
+        model_list = ["model_1", "model_2"]
     best_plddt = 0
     for model_name in model_list:
         config = model_config(model_name)
