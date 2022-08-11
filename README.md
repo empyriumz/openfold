@@ -215,11 +215,14 @@ see the aforementioned Staats & Rabe preprint.
 wastes time.
 - As a last resort, consider enabling `offload_inference`. This enables more
 extensive CPU offloading at various bottlenecks throughout the model.
+- Disable FlashAttention, which seems unstable on long sequences.
 
 Using the most conservative settings, we were able to run inference on a 
 4600-residue complex with a single A100. Compared to AlphaFold's own memory 
 offloading mode, ours is considerably faster; the same complex takes the more 
-efficent AlphaFold-Multimer more than double the time.
+efficent AlphaFold-Multimer more than double the time. Use the
+`long_sequence_inference` config option to enable all of these interventions
+at once.
 
 ### Training
 
@@ -303,7 +306,7 @@ python3 train_openfold.py mmcif_dir/ alignment_dir/ template_mmcif_dir/ output_d
     --template_release_dates_cache_path mmcif_cache.json \ 
     --precision bf16 \
     --gpus 8 --replace_sampler_ddp=True \
-    --seed 42 \ # in multi-gpu settings, the seed must be specified
+    --seed 4242022 \ # in multi-gpu settings, the seed must be specified
     --deepspeed_config_path deepspeed_config.json \
     --checkpoint_every_epoch \
     --resume_from_ckpt ckpt_dir/ \
@@ -323,7 +326,8 @@ script.
 
 If you're using your own MSAs or MSAs from the RODA repository, make sure that
 the `alignment_dir` contains one directory per chain and that each of these
-contains alignments (.sto, .a3m, and .hhr) corresponding to that chain.
+contains alignments (.sto, .a3m, and .hhr) corresponding to that chain. You
+can use `scripts/flatten_roda.sh` to reformat RODA downloads in this way.
 
 Note that, despite its variable name, `mmcif_dir` can also contain PDB files 
 or even ProteinNet .core files. To emulate the AlphaFold training procedure, 
