@@ -513,6 +513,22 @@ def main(args):
 
         logger.info(f"Model output written to {output_dict_path}...")
 
+def update_timings(dict, output_file=os.path.join(os.getcwd(), "timings.json")):
+    """Write dictionary of one or more run step times to a file"""
+    import json
+    if os.path.exists(output_file):
+        with open(output_file, "r") as f:
+            try:
+                timings = json.load(f)
+            except json.JSONDecodeError:
+                logger.info(f"Overwriting non-standard JSON in {output_file}.")
+                timings = {}
+    else:
+        timings = {}
+    timings.update(dict)
+    with open(output_file, "w") as f:
+        json.dump(timings, f)
+    return output_file
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
