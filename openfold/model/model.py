@@ -138,7 +138,7 @@ class AlphaFold(nn.Module):
         for i in range(n_templ):
             idx = batch["template_aatype"].new_tensor(i)
             single_template_feats = tensor_tree_map(
-                lambda t: torch.index_select(t, templ_dim, idx),
+                lambda t: torch.index_select(t, templ_dim, idx).squeeze(templ_dim),
                 batch,
             )
 
@@ -160,7 +160,7 @@ class AlphaFold(nn.Module):
             del t
 
         if(not inplace_safe):
-            t_pair = torch.cat(pair_embeds, dim=templ_dim)
+            t_pair = torch.stack(pair_embeds, dim=templ_dim)
        
         del pair_embeds
 
