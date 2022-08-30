@@ -497,7 +497,7 @@ def main(args):
 
         # Save the relaxed PDB.
         relaxed_output_path = os.path.join(
-            args.output_dir, "{}_{:.2f}_relaxed.pdb".format(output_name, best_plddt)
+            args.output_dir, "{}_{:.2f}.pdb".format(output_name, best_plddt)
         )
         with open(relaxed_output_path, "w") as fp:
             fp.write(relaxed_pdb_str)
