@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import datetime
 from multiprocessing import cpu_count
 from typing import Mapping, Optional, Sequence, Any
 
@@ -213,9 +214,7 @@ def make_pdb_features(
     if is_distillation:
         high_confidence = protein_object.b_factors > confidence_threshold
         high_confidence = np.any(high_confidence, axis=-1)
-        for i, confident in enumerate(high_confidence):
-            if not confident:
-                pdb_feats["all_atom_mask"][i] = 0
+        pdb_feats["all_atom_mask"] *= high_confidence[..., None]
 
     return pdb_feats
 
@@ -253,11 +252,8 @@ def make_msa_features(
 
 
 def make_sequence_features_with_custom_template(
-        sequence: str,
-        mmcif_path: str,
-        pdb_id: str,
-        chain_id: str,
-        kalign_binary_path: str) -> FeatureDict:
+    sequence: str, mmcif_path: str, pdb_id: str, chain_id: str, kalign_binary_path: str
+) -> FeatureDict:
     """
     process a single fasta file using features derived from a single template rather than an alignment
     """
@@ -278,14 +274,11 @@ def make_sequence_features_with_custom_template(
         query_sequence=sequence,
         pdb_id=pdb_id,
         chain_id=chain_id,
-        kalign_binary_path=kalign_binary_path
+        kalign_binary_path=kalign_binary_path,
     )
 
-    return {
-        **sequence_features,
-        **msa_features,
-        **template_features.features
-    }
+    return {**sequence_features, **msa_features, **template_features.features}
+
 
 class AlignmentRunner:
     """Runs alignment tools and saves the results"""
@@ -492,9 +485,6 @@ class DataPipeline:
         msa_data = {}
         if alignment_index is not None:
             fp = open(os.path.join(alignment_dir, alignment_index["db"]), "rb")
-
-        if _alignment_index is not None:
-            fp = open(os.path.join(alignment_dir, _alignment_index["db"]), "rb")
 
             def read_msa(start, size):
                 fp.seek(start)

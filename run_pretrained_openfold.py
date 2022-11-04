@@ -18,9 +18,16 @@ import math
 import numpy as np
 import os
 
-from openfold.utils.script_utils import load_models_from_command_line, parse_fasta, run_model, prep_output, \
-    update_timings, relax_protein
-
+from openfold.utils.script_utils import (
+    parse_fasta,
+    run_model,
+    prep_output,
+    relax_protein,
+)
+from openfold.utils.import_weights import (
+    import_jax_weights_,
+)
+from openfold.model.model import AlphaFold
 logging.basicConfig()
 logger = logging.getLogger(__file__)
 logger.setLevel(level=logging.INFO)
@@ -109,7 +116,7 @@ def run_model(model, batch, tag, args):
         t = time.perf_counter()
         out = model(batch)
         inference_time = time.perf_counter() - t
-        logger.info("Inference time: {:.2f}".format(inference_time))
+        logger.info("Inference time: {:.1f}".format(inference_time))
 
         model.config.template.enabled = template_enabled
 
@@ -118,8 +125,6 @@ def run_model(model, batch, tag, args):
 
 def prep_output(out, batch, feature_dict, feature_processor, args):
     plddt = out["plddt"]
-    mean_plddt = np.mean(plddt)
-
     plddt_b_factors = np.repeat(
         plddt[..., None], residue_constants.atom_type_num, axis=-1
     )
@@ -183,21 +188,6 @@ def prep_output(out, batch, feature_dict, feature_processor, args):
 
     return unrelaxed_protein
 
-
-def parse_fasta(data):
-    data = re.sub(">$", "", data, flags=re.M)
-    lines = [
-        l.replace("\n", "")
-        for prot in data.split(">")
-        for l in prot.strip().split("\n", 1)
-    ][1:]
-    tags, seqs = lines[::2], lines[1::2]
-
-    tags = [t.split()[0] for t in tags]
-
-    return tags, seqs
-
-
 def generate_feature_dict(
     tags,
     seqs,
@@ -250,71 +240,6 @@ def count_models_to_evaluate(openfold_checkpoint_path, jax_param_path):
     if jax_param_path:
         model_count += len(jax_param_path.split(","))
     return model_count
-
-
-def load_models_from_command_line(args, config):
-    # Create the output directory
-
-    multiple_model_mode = (
-        count_models_to_evaluate(args.openfold_checkpoint_path, args.jax_param_path) > 1
-    )
-    if multiple_model_mode:
-        logger.info(f"evaluating multiple models")
-
-    if args.jax_param_path:
-        for path in args.jax_param_path.split(","):
-            model_basename = get_model_basename(path)
-            model_version = "_".join(model_basename.split("_")[1:])
-            model = AlphaFold(config)
-            model = model.eval()
-            import_jax_weights_(model, path, version=model_version)
-            model = model.to(args.model_device)
-            logger.info(f"Successfully loaded JAX parameters at {path}...")
-            output_directory = make_output_directory(
-                args.output_dir, model_basename, multiple_model_mode
-            )
-            yield model, output_directory
-
-    if args.openfold_checkpoint_path:
-        for path in args.openfold_checkpoint_path.split(","):
-            model = AlphaFold(config)
-            model = model.eval()
-            checkpoint_basename = get_model_basename(path)
-            if os.path.isdir(path):
-                # A DeepSpeed checkpoint
-                ckpt_path = os.path.join(
-                    args.output_dir,
-                    checkpoint_basename + ".pt",
-                )
-
-                if not os.path.isfile(ckpt_path):
-                    convert_zero_checkpoint_to_fp32_state_dict(
-                        path,
-                        ckpt_path,
-                    )
-                d = torch.load(ckpt_path)
-                model.load_state_dict(d["ema"]["params"])
-            else:
-                ckpt_path = path
-                d = torch.load(ckpt_path)
-
-                if "ema" in d:
-                    # The public weights have had this done to them already
-                    d = d["ema"]["params"]
-                model.load_state_dict(d)
-
-            model = model.to(args.model_device)
-            logger.info(f"Loaded OpenFold parameters at {path}...")
-            output_directory = make_output_directory(
-                args.output_dir, checkpoint_basename, multiple_model_mode
-            )
-            yield model, output_directory
-
-    if not args.jax_param_path and not args.openfold_checkpoint_path:
-        raise ValueError(
-            "At least one of jax_param_path or openfold_checkpoint_path must "
-            "be specified."
-        )
 
 
 def list_files_with_extensions(dir, extensions):
@@ -393,7 +318,6 @@ def main(args):
         seq_sort_fn = lambda target: sum([len(s) for s in target[1]])
         sorted_targets = sorted(zip(tag_list, seq_list), key=seq_sort_fn)
         feature_dicts = {}
-        # for model, output_directory in load_models_from_command_line(args, config):
         cur_tracing_interval = 0
         for (tag, tags), seqs in sorted_targets:
             # Does nothing if the alignments have already been computed
@@ -451,24 +375,8 @@ def main(args):
             out = tensor_tree_map(lambda x: np.array(x.cpu()), out)
             mean_plddt = np.mean(out["plddt"])
             logger.info("Mean plddt for {}: {:.2f}".format(model_name, mean_plddt))
-            # unrelaxed_protein = prep_output(
-            #     out,
-            #     processed_feature_dict,
-            #     feature_dict,
-            #     feature_processor,
-            #     args
-            # )
-            #         unrelaxed_output_path = os.path.join(
-            #     args.output_dir, f'{output_name}_unrelaxed.pdb'
-            # )
-
-            #         with open(unrelaxed_output_path, 'w') as fp:
-            #             fp.write(protein.to_pdb(unrelaxed_protein))
-
-            # logger.info(f"Output written to {unrelaxed_output_path}...")
             if mean_plddt > best_plddt:
                 best_plddt = mean_plddt
-                # best_protein = unrelaxed_protein
                 best_protein = prep_output(
                     out, processed_feature_dict, feature_dict, feature_processor, args
                 )
@@ -477,30 +385,37 @@ def main(args):
                     output_name = f"{output_name}_{args.output_postfix}"
 
     if not args.skip_relaxation:
-        amber_relaxer = relax.AmberRelaxation(
-            use_gpu=(args.model_device != "cpu"),
-            **config.relax,
-        )
+        relax_protein(
+                    config,
+                    args.model_device,
+                    best_protein,
+                    args.output_dir,
+                    output_name,
+                )
+        # amber_relaxer = relax.AmberRelaxation(
+        #     use_gpu=(args.model_device != "cpu"),
+        #     **config.relax,
+        # )
 
-        # Relax the prediction.
-        logger.info(f"Running relaxation on the best models")
-        t = time.perf_counter()
-        visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
-        if "cuda" in args.model_device:
-            device_no = args.model_device.split(":")[-1]
-            os.environ["CUDA_VISIBLE_DEVICES"] = device_no
-        relaxed_pdb_str, _, _ = amber_relaxer.process(prot=best_protein)
-        os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
-        logger.info("Relaxation time: {:.2f}".format(time.perf_counter() - t))
+        # # Relax the prediction.
+        # logger.info(f"Running relaxation on the best models")
+        # t = time.perf_counter()
+        # visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
+        # if "cuda" in args.model_device:
+        #     device_no = args.model_device.split(":")[-1]
+        #     os.environ["CUDA_VISIBLE_DEVICES"] = device_no
+        # relaxed_pdb_str, _, _ = amber_relaxer.process(prot=best_protein)
+        # os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
+        # logger.info("Relaxation time: {:.2f}".format(time.perf_counter() - t))
 
-        # Save the relaxed PDB.
-        relaxed_output_path = os.path.join(
-            args.output_dir, "{}_{:.2f}.pdb".format(output_name, best_plddt)
-        )
-        with open(relaxed_output_path, "w") as fp:
-            fp.write(relaxed_pdb_str)
+        # # Save the relaxed PDB.
+        # relaxed_output_path = os.path.join(
+        #     args.output_dir, "{}_{:.2f}.pdb".format(output_name, best_plddt)
+        # )
+        # with open(relaxed_output_path, "w") as fp:
+        #     fp.write(relaxed_pdb_str)
 
-        logger.info(f"Relaxed output written to {relaxed_output_path}...")
+        # logger.info(f"Relaxed output written to {relaxed_output_path}...")
 
     if args.save_outputs:
         output_dict_path = os.path.join(
@@ -632,7 +547,4 @@ if __name__ == "__main__":
             """The model is being run on CPU. Consider specifying 
             --model_device for better performance"""
         )
-    logging.basicConfig(filename="example.log", level=logging.INFO)
     main(args)
-    logging.info(f"Total time used: {time.perf_counter() - t_start}")
-    print("Total time used: {:.1f} seconds".format(time.perf_counter() - t_start))

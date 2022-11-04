@@ -764,8 +764,8 @@ def get_single_template_hit_list(
             template_sequence = mmcif.chain_to_seqres[chain_id]
             seq_name = cif_file.stem.upper() + "_" + chain_id
             seq = SeqRecord(
-                    Seq(template_sequence), id=seq_name, name="", description=""
-                )
+                Seq(template_sequence), id=seq_name, name="", description=""
+            )
             """
             At this stage, we have a template sequence.
             and a query sequence.
@@ -794,6 +794,7 @@ def get_single_template_hit_list(
                 print("Template %s not included (failed to process)" % (cif_file))
 
     return template_hit_list
+
 
 class flex_double:
     #  just a holder that allows min_max_mean and standard_deviation_of_the_sample

@@ -86,8 +86,8 @@ class LengthError(PrefilterError):
 
 TEMPLATE_FEATURES = {
     "template_aatype": np.int64,
-    "template_all_atom_mask": np.float64,
-    "template_all_atom_positions": np.float64,
+    "template_all_atom_mask": np.float32,
+    "template_all_atom_positions": np.float32,
     "template_domain_names": np.object,
     "template_sequence": np.object,
     "template_sum_probs": np.float32,
@@ -885,23 +885,20 @@ def _process_single_hit(
 
 
 def get_custom_template_features(
-        mmcif_path: str,
-        query_sequence: str,
-        pdb_id: str,
-        chain_id: str,
-        kalign_binary_path: str):
+    mmcif_path: str,
+    query_sequence: str,
+    pdb_id: str,
+    chain_id: str,
+    kalign_binary_path: str,
+):
 
     with open(mmcif_path, "r") as mmcif_path:
         cif_string = mmcif_path.read()
 
-    mmcif_parse_result = mmcif_parsing.parse(
-        file_id=pdb_id, mmcif_string=cif_string
-    )
+    mmcif_parse_result = mmcif_parsing.parse(file_id=pdb_id, mmcif_string=cif_string)
     template_sequence = mmcif_parse_result.mmcif_object.chain_to_seqres[chain_id]
 
-
-    mapping = {x:x for x, _ in enumerate(query_sequence)}
-
+    mapping = {x: x for x, _ in enumerate(query_sequence)}
 
     features, warnings = _extract_template_features(
         mmcif_object=mmcif_parse_result.mmcif_object,
@@ -911,7 +908,7 @@ def get_custom_template_features(
         query_sequence=query_sequence,
         template_chain_id=chain_id,
         kalign_binary_path=kalign_binary_path,
-        _zero_center_positions=True
+        _zero_center_positions=True,
     )
     features["template_sum_probs"] = [1.0]
 
@@ -924,14 +921,13 @@ def get_custom_template_features(
         template_features[k].append(features[k])
 
     for name in template_features:
-        template_features[name] = np.stack(
-            template_features[name], axis=0
-        ).astype(TEMPLATE_FEATURES[name])
+        template_features[name] = np.stack(template_features[name], axis=0).astype(
+            TEMPLATE_FEATURES[name]
+        )
 
     return TemplateSearchResult(
         features=template_features, errors=None, warnings=warnings
     )
-
 
 
 @dataclasses.dataclass(frozen=True)

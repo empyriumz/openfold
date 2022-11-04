@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+
 def run_shell(text, print_text=True):
     """Utility to run a string as a shell script and toss output"""
 
@@ -8,6 +9,7 @@ def run_shell(text, print_text=True):
         print("RUNNING:", text)
     result = os.system(text)
     return result
+
 
 def run_pdb_to_cif(pdb_file, content_dir="/host/openfold"):
     assert content_dir is not None
@@ -24,4 +26,7 @@ def run_pdb_to_cif(pdb_file, content_dir="/host/openfold"):
     )
     return Path(output_file)
 
-run_pdb_to_cif("/host/openfold/enhanced_recycle/7lci/1st_iter/7LCI_model_3_75.89_rebuilt_with_deepemhancer.pdb")
+
+run_pdb_to_cif(
+    "/host/openfold/enhanced_recycle/7lci/1st_iter/7LCI_model_3_75.89_rebuilt_with_deepemhancer.pdb"
+)
