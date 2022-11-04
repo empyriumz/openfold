@@ -81,6 +81,13 @@ class OpenFoldSingleDataset(torch.utils.data.Dataset):
         """
         super(OpenFoldSingleDataset, self).__init__()
         self.data_dir = data_dir
+
+        self.chain_data_cache = None
+        if chain_data_cache_path is not None:
+            with open(chain_data_cache_path, "r") as fp:
+                self.chain_data_cache = json.load(fp)
+            assert isinstance(self.chain_data_cache, dict)
+
         self.alignment_dir = alignment_dir
         self.config = config
         self.treat_pdb_as_distillation = treat_pdb_as_distillation
@@ -304,9 +311,8 @@ class OpenFoldDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         datasets: Sequence[OpenFoldSingleDataset],
-        probabilities: Sequence[int],
+        probabilities: Sequence[float],
         epoch_len: int,
-        chain_data_cache_paths: List[str],
         generator: torch.Generator = None,
         _roll_at_init: bool = True,
     ):
@@ -337,7 +343,7 @@ class OpenFoldDataset(torch.utils.data.Dataset):
             max_cache_len = int(epoch_len * probabilities[dataset_idx])
             dataset = self.datasets[dataset_idx]
             idx_iter = looped_shuffled_dataset_idx(len(dataset))
-            chain_data_cache = self.chain_data_caches[dataset_idx]
+            chain_data_cache = dataset.chain_data_cache
             while True:
                 weights = []
                 idx = []
@@ -588,6 +594,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
         if self.training_mode:
             train_dataset = dataset_gen(
                 data_dir=self.train_data_dir,
+                chain_data_cache_path=self.train_chain_data_cache_path,
                 alignment_dir=self.train_alignment_dir,
                 filter_path=self.train_filter_path,
                 max_template_hits=self.config.train.max_template_hits,
@@ -601,6 +608,7 @@ class OpenFoldDataModule(pl.LightningDataModule):
             if self.distillation_data_dir is not None:
                 distillation_dataset = dataset_gen(
                     data_dir=self.distillation_data_dir,
+                    chain_data_cache_path=self.distillation_chain_data_cache_path,
                     alignment_dir=self.distillation_alignment_dir,
                     filter_path=self.distillation_filter_path,
                     max_template_hits=self.config.train.max_template_hits,
@@ -636,7 +644,6 @@ class OpenFoldDataModule(pl.LightningDataModule):
                 datasets=datasets,
                 probabilities=probabilities,
                 epoch_len=self.train_epoch_len,
-                chain_data_cache_paths=chain_data_cache_paths,
                 generator=generator,
                 _roll_at_init=False,
             )

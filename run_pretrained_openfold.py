@@ -18,6 +18,9 @@ import math
 import numpy as np
 import os
 
+from openfold.utils.script_utils import load_models_from_command_line, parse_fasta, run_model, prep_output, \
+    update_timings, relax_protein
+
 logging.basicConfig()
 logger = logging.getLogger(__file__)
 logger.setLevel(level=logging.INFO)
@@ -29,7 +32,6 @@ from pytorch_lightning.utilities.deepspeed import (
 import random
 import time
 import torch
-import re
 
 torch_versions = torch.__version__.split(".")
 torch_major_version = int(torch_versions[0])
@@ -42,13 +44,9 @@ torch.set_grad_enabled(False)
 
 from openfold.config import model_config
 from openfold.data import templates, feature_pipeline, data_pipeline
-from openfold.model.model import AlphaFold
-from openfold.model.torchscript import script_preset_
 from openfold.np import residue_constants, protein
 import openfold.np.relax.relax as relax
-from openfold.utils.import_weights import (
-    import_jax_weights_,
-)
+
 from openfold.utils.tensor_utils import (
     tensor_tree_map,
 )
@@ -444,7 +442,7 @@ def main(args):
                     logger.info(f"Tracing time: {tracing_time}")
                     cur_tracing_interval = rounded_seqlen
 
-            out = run_model(model, processed_feature_dict, tag, args)
+            out = run_model(model, processed_feature_dict, tag, args.output_dir)
 
             # Toss out the recycling dimensions --- we don't need them anymore
             processed_feature_dict = tensor_tree_map(
@@ -513,22 +511,6 @@ def main(args):
 
         logger.info(f"Model output written to {output_dict_path}...")
 
-def update_timings(dict, output_file=os.path.join(os.getcwd(), "timings.json")):
-    """Write dictionary of one or more run step times to a file"""
-    import json
-    if os.path.exists(output_file):
-        with open(output_file, "r") as f:
-            try:
-                timings = json.load(f)
-            except json.JSONDecodeError:
-                logger.info(f"Overwriting non-standard JSON in {output_file}.")
-                timings = {}
-    else:
-        timings = {}
-    timings.update(dict)
-    with open(output_file, "w") as f:
-        json.dump(timings, f)
-    return output_file
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
