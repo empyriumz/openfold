@@ -35,6 +35,7 @@ from scipy.stats import truncnorm
 from openfold.utils.checkpointing import get_checkpoint_fn
 from openfold.utils.chunk_utils import _chunk_slice
 from openfold.utils.kernel.attention_core import attention_core
+from openfold.utils.precision_utils import is_fp16_enabled
 from openfold.utils.tensor_utils import (
     permute_final_dims,
     flatten_final_dims,
@@ -479,6 +480,9 @@ class Attention(nn.Module):
         q, k, v = self._prep_qkv(q_x, kv_x)
 
         # [*, Q, H, C_hidden]
+        if is_fp16_enabled():
+            use_memory_efficient_kernel = False
+        
         if(use_memory_efficient_kernel):
             if(len(biases) > 2):
                 raise ValueError(

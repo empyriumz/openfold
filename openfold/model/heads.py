@@ -21,6 +21,7 @@ from openfold.utils.loss import (
     compute_tm,
     compute_predicted_aligned_error,
 )
+from openfold.utils.precision_utils import is_fp16_enabled
 
 
 class AuxiliaryHeads(nn.Module):
@@ -136,7 +137,7 @@ class DistogramHead(nn.Module):
 
         self.linear = Linear(self.c_z, self.no_bins, init="final")
 
-    def forward(self, z):  # [*, N, N, C_z]
+    def _forward(self, z):  # [*, N, N, C_z]
         """
         Args:
             z:
@@ -148,6 +149,13 @@ class DistogramHead(nn.Module):
         logits = self.linear(z)
         logits = logits + logits.transpose(-2, -3)
         return logits
+    
+    def forward(self, z): 
+        if(is_fp16_enabled()):
+            with torch.cuda.amp.autocast(enabled=False):
+                return self._forward(z.float())
+        else:
+            return self._forward(z)
 
 
 class TMScoreHead(nn.Module):

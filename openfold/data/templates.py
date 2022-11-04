@@ -22,7 +22,10 @@ import logging
 import os
 import re
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
-
+from pathlib import Path
+from io import StringIO
+import shutil
+from contextlib import redirect_stdout
 import numpy as np
 
 from openfold.data import parsers, mmcif_parsing
@@ -881,6 +884,56 @@ def _process_single_hit(
         return SingleHitResult(features=None, error=error, warning=None)
 
 
+def get_custom_template_features(
+        mmcif_path: str,
+        query_sequence: str,
+        pdb_id: str,
+        chain_id: str,
+        kalign_binary_path: str):
+
+    with open(mmcif_path, "r") as mmcif_path:
+        cif_string = mmcif_path.read()
+
+    mmcif_parse_result = mmcif_parsing.parse(
+        file_id=pdb_id, mmcif_string=cif_string
+    )
+    template_sequence = mmcif_parse_result.mmcif_object.chain_to_seqres[chain_id]
+
+
+    mapping = {x:x for x, _ in enumerate(query_sequence)}
+
+
+    features, warnings = _extract_template_features(
+        mmcif_object=mmcif_parse_result.mmcif_object,
+        pdb_id=pdb_id,
+        mapping=mapping,
+        template_sequence=template_sequence,
+        query_sequence=query_sequence,
+        template_chain_id=chain_id,
+        kalign_binary_path=kalign_binary_path,
+        _zero_center_positions=True
+    )
+    features["template_sum_probs"] = [1.0]
+
+    # TODO: clean up this logic
+    template_features = {}
+    for template_feature_name in TEMPLATE_FEATURES:
+        template_features[template_feature_name] = []
+
+    for k in template_features:
+        template_features[k].append(features[k])
+
+    for name in template_features:
+        template_features[name] = np.stack(
+            template_features[name], axis=0
+        ).astype(TEMPLATE_FEATURES[name])
+
+    return TemplateSearchResult(
+        features=template_features, errors=None, warnings=warnings
+    )
+
+
+
 @dataclasses.dataclass(frozen=True)
 class TemplateSearchResult:
     features: Mapping[str, Any]
@@ -1184,10 +1237,186 @@ def deprecated_single_template_process(feature, template_path):
         print("Not using any templates")
     return {**feature, **template_features}
 
-def single_template_process(
-    feature, template_path, hhDB_dir="/data/openfold/pdb70/pdb70"
+
+def runsh(text, print_text=True):
+    """Utility to run a string as a shell script and toss output"""
+
+    if print_text:
+        print("RUNNING:", text)
+    result = os.system(text)
+    return result
+
+
+def hh_process_seq(
+    query_seq=None, template_seq=None, content_dir=None, hhDB_dir=None, db_prefix="DB"
 ):
-    from alphafold_utils import get_single_template_hit_list, get_template_hit_list
+    """
+    This is a hack to get hhsuite output strings to pass on
+    to the AlphaFold template featurizer.
+
+    Note: that in the case of multiple templates, this would be faster to build one database for
+    all the templates. Currently it builds a database with only one template at a time. Even
+    better would be to get an hhsuite alignment without using a database at all, just between
+    pairs of sequence files. However, I have not figured out how to do this.
+
+    Update: I think the hhsearch can be replaced completely, and we can just do a pairwise
+    alignment with biopython, or skip alignment if the seqs match. TODO
+    """
+
+    from openfold.data.alphafold.parsers import parse_hhr
+    from Bio import SeqIO
+    from openfold.data.alphafold import hhsearch
+
+    # set up directory for hhsuite DB.
+    #  Place one template fasta file to be the DB contents
+    if not hasattr(hhDB_dir, "exists"):
+        hhDB_dir = Path(hhDB_dir)
+    if hhDB_dir.exists() and not hhDB_dir.as_posix() in ["/content", "/content/"]:
+        shutil.rmtree(hhDB_dir)
+
+    msa_dir = Path(hhDB_dir, "msa")
+    if msa_dir.exists() and not msa_dir.as_posix() in ["/content", "/content/"]:
+        shutil.rmtree(msa_dir)
+
+    msa_dir.mkdir(parents=True)
+    assert os.path.isdir(hhDB_dir)
+    msa_dir = Path(os.path.abspath(msa_dir))
+    hhDB_dir = Path(os.path.abspath(hhDB_dir))
+    content_dir = Path(os.path.abspath(content_dir))
+
+    template_seq_path = Path(msa_dir, "template.fasta")
+    with template_seq_path.open("w") as fh:
+        SeqIO.write([template_seq], fh, "fasta")
+    print("MSA DIR", msa_dir)
+    # make hhsuite DB
+    with redirect_stdout(StringIO()) as out:
+        os.chdir(msa_dir)
+        print("Working in msa_dir: %s" % (os.getcwd()))
+        import subprocess
+
+        runsh("ffindex_build -s ../DB_msa.ffdata ../DB_msa.ffindex .")
+        os.chdir(hhDB_dir)
+        print("Working in hhDB_dir: %s" % (os.getcwd()))
+        runsh(
+            " ffindex_apply DB_msa.ffdata DB_msa.ffindex  -i DB_a3m.ffindex -d DB_a3m.ffdata  -- hhconsensus -M 50 -maxres 65535 -i stdin -oa3m stdout -v 0"
+        )
+        runsh(" rm DB_msa.ffdata DB_msa.ffindex")
+        runsh(
+            " ffindex_apply DB_a3m.ffdata DB_a3m.ffindex -i DB_hhm.ffindex -d DB_hhm.ffdata -- hhmake -i stdin -o stdout -v 0"
+        )
+        # This one needs subprocess.call:
+        subprocess.call(
+            [
+                "cstranslate",
+                "-f",
+                "-x",
+                "0.3",
+                "-c",
+                "4",
+                "-I",
+                "a3m",
+                "-i",
+                "DB_a3m",
+                "-o",
+                "DB_cs219",
+            ]
+        )
+        runsh(" sort -k3 -n -r DB_cs219.ffindex | cut -f1 > sorting.dat")
+        runsh(
+            " ffindex_order sorting.dat DB_hhm.ffdata DB_hhm.ffindex DB_hhm_ordered.ffdata DB_hhm_ordered.ffindex"
+        )
+        runsh(" mv DB_hhm_ordered.ffindex DB_hhm.ffindex")
+        runsh(" mv DB_hhm_ordered.ffdata DB_hhm.ffdata")
+        runsh(
+            " ffindex_order sorting.dat DB_a3m.ffdata DB_a3m.ffindex DB_a3m_ordered.ffdata DB_a3m_ordered.ffindex"
+        )
+        runsh(" mv DB_a3m_ordered.ffindex DB_a3m.ffindex")
+        runsh(" mv DB_a3m_ordered.ffdata DB_a3m.ffdata")
+        os.chdir(content_dir)
+        print("Working in content_dir: %s" % (os.getcwd()))
+
+    # run hhsearch
+    db_dir = hhDB_dir.as_posix() + "/" + db_prefix
+    if not os.path.isdir(db_dir):
+        os.mkdir(db_dir)
+
+    hhsearch_runner = hhsearch.HHSearch(
+        binary_path="/direct/sdcc+u/xdai/.conda/envs/openfold/bin/hhsearch",
+        databases=[db_dir],
+    )
+    with StringIO() as fh:
+        SeqIO.write([query_seq], fh, "fasta")
+        seq_fasta = fh.getvalue()
+    hhsearch_result = hhsearch_runner.query(seq_fasta)
+
+    # process hits
+    hhsearch_hits = parse_hhr(hhsearch_result)
+    if len(hhsearch_hits) > 0:
+        from dataclasses import replace
+
+        hit = hhsearch_hits[0]
+        hit = replace(hit, **{"name": template_seq.id})
+    else:
+        hit = None
+    return hit
+
+
+def get_single_template_hit_list(
+    cif_file=None, query_seq=None, hhDB_dir=None, content_dir=None
+):
+    assert content_dir is not None
+    # from alphafold.data import mmcif_parsing
+    from openfold.data.alphafold import mmcif_parsing
+    from Bio.SeqRecord import SeqRecord
+    from Bio.Seq import Seq
+
+    template_hit_list = []
+
+    print("CIF file included:", str(cif_file))
+    with cif_file.open("r") as fh:
+        filestr = fh.read()
+        mmcif_obj = mmcif_parsing.parse(file_id=cif_file.stem, mmcif_string=filestr)
+        mmcif = mmcif_obj.mmcif_object
+        for chain_id, template_sequence in mmcif.chain_to_seqres.items():
+            template_sequence = mmcif.chain_to_seqres[chain_id]
+            seq_name = cif_file.stem.upper() + "_" + chain_id
+            seq = SeqRecord(
+                Seq(template_sequence), id=seq_name, name="", description=""
+            )
+            """
+            At this stage, we have a template sequence.
+            and a query sequence.
+            There are two options to generate template features:
+            1. Write new code to manually generate template features
+            2. Get an hhr alignment string, and pass that
+                to the existing template featurizer.
+
+            I chose the second, implemented in hh_process_seq()
+            """
+            try:
+                hit = hh_process_seq(
+                    query_seq=query_seq,
+                    template_seq=seq,
+                    hhDB_dir=hhDB_dir,
+                    content_dir=content_dir,
+                )
+
+            except Exception as e:
+                print("Failed to process %s" % (cif_file), e)
+                hit = None
+            if hit is not None:
+                template_hit_list.append([hit, mmcif])
+                print("Template %s included" % (cif_file))
+            else:
+                print("Template %s not included (failed to process)" % (cif_file))
+
+    return template_hit_list
+
+
+def single_template_process(
+    feature, template_path, hhDB_dir="/hpcgpfs01/scratch/xdai/openfold/pdb70/pdb70"
+):
+    # from alphafold_utils import get_single_template_hit_list
     from Bio.SeqRecord import SeqRecord
     from Bio.Seq import Seq
     from pathlib import Path
@@ -1196,7 +1425,7 @@ def single_template_process(
         _build_query_to_hit_index_mapping,
     )
 
-    #working_cif_file_list = [Path(template_path)]
+    # working_cif_file_list = [Path(template_path)]
     query_sequence = feature["sequence"][0].decode("utf-8")
     query_seq = SeqRecord(Seq(query_sequence), id="query", name="", description="")
     content_dir = "./"
@@ -1207,16 +1436,19 @@ def single_template_process(
         hhDB_dir=hhDB_dir,
         content_dir=content_dir,
     )
-    
+
     if template_hit_list:
         from dataclasses import replace
+
         template_hit_list = [
-                [replace(hit, **{"index": i + 1}), mmcif]
-                for i, [hit, mmcif] in enumerate(template_hit_list)
-            ]
+            [replace(hit, **{"index": i + 1}), mmcif]
+            for i, [hit, mmcif] in enumerate(template_hit_list)
+        ]
         template_hit_list = sorted(
-                template_hit_list, key=lambda xx: xx[0].sum_probs, reverse=True
-            )[:3] ## maximum 3 hits (it works even the list is shorter than 3)
+            template_hit_list, key=lambda xx: xx[0].sum_probs, reverse=True
+        )[
+            :3
+        ]  ## maximum 3 hits (it works even the list is shorter than 3)
         # process hits into template features
 
         template_features = {}
@@ -1225,7 +1457,7 @@ def single_template_process(
 
         # Select only one chain from any cif file
         unique_template_hits = []
-        #pdb_text_list = []
+        # pdb_text_list = []
 
         for [hit, mmcif] in template_hit_list:
             unique_template_hits.append(hit)
@@ -1275,5 +1507,6 @@ def single_template_process(
                 print("ERROR: Some template features are empty")
     else:  # no templates
         print("Not using any templates")
-        # template_features = mk_mock_template(query_sequence * params.homooligomer)
+        return feature
+
     return {**feature, **template_features}

@@ -6,10 +6,14 @@ BASE="$4"
 DB1="$5"
 DB2="$6"
 DB3="$7"
-USE_ENV="${8:-1}"
-USE_TEMPLATES="${9:-0}"
-FILTER="${10:-1}"
-INDEX=${11:-1}
+# USE_ENV="${8:-1}"
+USE_ENV="$8"
+# USE_TEMPLATES="${9:-0}"
+USE_TEMPLATES="$9"
+# FILTER="${10:-1}"
+FILTER="${10}"
+INDEX="${11:-1}"
+#INDEX="${11}"
 DB_LOAD_MODE="${12:-2}"
 EXPAND_EVAL=inf
 ALIGN_EVAL=10
@@ -33,6 +37,10 @@ else
   IDX=""
   export MMSEQS_IGNORE_INDEX=1
 fi
+echo $INDEX $DBBASE $DB1 $DB2 $DB3
+echo "${DBBASE}/${DB1}/${DB1}${SEQ}"
+echo "${DBBASE}/${DB1}/${DB1}${ALN}"
+echo "${DBBASE}/${DB1}/${DB1}"
 export MMSEQS_CALL_DEPTH=1
 SEARCH_PARAM="--num-iterations 3 --db-load-mode ${DB_LOAD_MODE} -a -s 8 -e 0.1 --max-seqs 10000"
 FILTER_PARAM="--filter-msa ${FILTER} --filter-min-enable 1000 --diff ${DIFF} --qid 0.0,0.2,0.4,0.6,0.8,1.0 --qsc 0 --max-seq-id 0.95"

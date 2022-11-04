@@ -21,6 +21,7 @@ import torch.nn as nn
 
 from openfold.model.primitives import Linear
 from openfold.utils.chunk_utils import chunk_layer
+from openfold.utils.precision_utils import is_fp16_enabled
 
 
 class OuterProductMean(nn.Module):
@@ -93,7 +94,7 @@ class OuterProductMean(nn.Module):
 
         return outer
 
-    def forward(self, 
+    def _forward(self, 
         m: torch.Tensor, 
         mask: Optional[torch.Tensor] = None,
         chunk_size: Optional[int] = None,
@@ -143,3 +144,16 @@ class OuterProductMean(nn.Module):
             outer = outer / norm
 
         return outer
+
+    def forward(self,
+                m: torch.Tensor,
+                mask: Optional[torch.Tensor] = None,
+                chunk_size: Optional[int] = None,
+                inplace_safe: bool = False,
+    ) -> torch.Tensor:
+        if(is_fp16_enabled()):
+            with torch.cuda.amp.autocast(enabled=False):
+                return self._forward(m.float(), mask, chunk_size, inplace_safe)
+        else:
+            return self._forward(m, mask, chunk_size, inplace_safe)
+        

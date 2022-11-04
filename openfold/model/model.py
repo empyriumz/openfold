@@ -138,7 +138,7 @@ class AlphaFold(nn.Module):
         for i in range(n_templ):
             idx = batch["template_aatype"].new_tensor(i)
             single_template_feats = tensor_tree_map(
-                lambda t: torch.index_select(t, templ_dim, idx),
+                lambda t: torch.index_select(t, templ_dim, idx).squeeze(templ_dim),
                 batch,
             )
 
@@ -160,7 +160,7 @@ class AlphaFold(nn.Module):
             del t
 
         if(not inplace_safe):
-            t_pair = torch.cat(pair_embeds, dim=templ_dim)
+            t_pair = torch.stack(pair_embeds, dim=templ_dim)
        
         del pair_embeds
 
@@ -183,10 +183,16 @@ class AlphaFold(nn.Module):
             use_lma=self.globals.use_lma,
         )
 
+        t_mask = torch.sum(batch["template_mask"], dim=-1) > 0
+        # Append singletons
+        t_mask = t_mask.reshape(
+            *t_mask.shape, *([1] * (len(t.shape) - len(t_mask.shape)))
+        )
+
         if(inplace_safe):
-            t *= (torch.sum(batch["template_mask"], dim=-1) > 0)
+            t *= t_mask
         else:
-            t = t * (torch.sum(batch["template_mask"], dim=-1) > 0)
+            t = t * t_mask
 
         ret = {}
 
@@ -368,7 +374,6 @@ class AlphaFold(nn.Module):
                 pair_mask=pair_mask.to(dtype=input_tensors[1].dtype),
                 chunk_size=self.globals.chunk_size,
                 use_lma=self.globals.use_lma,
-                use_flash=self.globals.use_flash,
                 _mask_trans=self.config._mask_trans,
             )
     

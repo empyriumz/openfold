@@ -41,16 +41,28 @@ def enforce_config_constraints(config):
     if(config.globals.use_flash and not fa_is_installed):
         raise ValueError("use_flash requires that FlashAttention is installed")
 
+    if(
+        config.globals.offload_inference and 
+        not config.model.template.average_templates
+    ):
+        config.model.template.offload_templates = True
 
-def model_config(name, train=False, low_prec=False):
+
+def model_config(
+    name, 
+    train=False, 
+    low_prec=False, 
+    long_sequence_inference=False
+):
     c = copy.deepcopy(config)
+    # TRAINING PRESETS
     if name == "initial_training":
         # AF2 Suppl. Table 4, "initial training" setting
         pass
     elif name == "finetuning":
         # AF2 Suppl. Table 4, "finetuning" setting
-        c.data.train.max_extra_msa = 5120
         c.data.train.crop_size = 384
+        c.data.train.max_extra_msa = 5120
         c.data.train.max_msa_clusters = 512
         c.loss.violation.weight = 1.
         c.loss.experimentally_resolved.weight = 0.01
@@ -64,22 +76,23 @@ def model_config(name, train=False, low_prec=False):
         c.loss.tm.weight = 0.1
     elif name == "finetuning_no_templ":
         # AF2 Suppl. Table 4, "finetuning" setting
-        c.data.train.max_extra_msa = 5120
         c.data.train.crop_size = 384
+        c.data.train.max_extra_msa = 5120
         c.data.train.max_msa_clusters = 512
         c.model.template.enabled = False
         c.loss.violation.weight = 1.
         c.loss.experimentally_resolved.weight = 0.01
     elif name == "finetuning_no_templ_ptm":
         # AF2 Suppl. Table 4, "finetuning" setting
-        c.data.train.max_extra_msa = 5120
         c.data.train.crop_size = 384
+        c.data.train.max_extra_msa = 5120
         c.data.train.max_msa_clusters = 512
         c.model.template.enabled = False
         c.loss.violation.weight = 1.
         c.loss.experimentally_resolved.weight = 0.01
         c.model.heads.tm.enabled = True
         c.loss.tm.weight = 0.1
+    # INFERENCE PRESETS
     elif name == "model_1":
         # AF2 Suppl. Table 5, Model 1.1.1
         c.data.train.max_extra_msa = 5120
@@ -142,6 +155,16 @@ def model_config(name, train=False, low_prec=False):
     else:
         raise ValueError("Invalid model name")
 
+    if long_sequence_inference:
+        assert(not train)
+        c.globals.offload_inference = True
+        c.globals.use_lma = True
+        c.globals.use_flash = False
+        c.model.template.offload_inference = True
+        c.model.template.template_pair_stack.tune_chunk_size = False
+        c.model.extra_msa.extra_msa_stack.tune_chunk_size = False
+        c.model.evoformer_stack.tune_chunk_size = False
+    
     if train:
         c.globals.blocks_per_ckpt = 1
         c.globals.chunk_size = None
@@ -149,6 +172,7 @@ def model_config(name, train=False, low_prec=False):
         c.globals.offload_inference = False
         c.model.template.average_templates = False
         c.model.template.offload_templates = False
+    
     if low_prec:
         c.globals.eps = 1e-4
         # If we want exact numerical parity with the original, inf can't be
@@ -335,6 +359,7 @@ config = mlc.ConfigDict(
                 "data_loaders": {
                     "batch_size": 1,
                     "num_workers": 16,
+                    "pin_memory": True,
                 },
             },
         },
@@ -346,7 +371,7 @@ config = mlc.ConfigDict(
             # exclusive with use_flash.
             "use_lma": False,
             # Use FlashAttention in selected modules. Mutually exclusive with 
-            # use_lma.
+            # use_lma. Doesn't work that well on long sequences (>1000 residues).
             "use_flash": False,
             "offload_inference": False,
             "c_z": c_z,
@@ -424,7 +449,8 @@ config = mlc.ConfigDict(
                 # Offload template embeddings to CPU memory. Vastly reduced
                 # memory consumption at the cost of a modest increase in
                 # runtime. Useful for inference on very long sequences.
-                # Mutually exclusive with average_templates.
+                # Mutually exclusive with average_templates. Automatically
+                # enabled if offload_inference is set.
                 "offload_templates": False,
             },
             "extra_msa": {
@@ -550,7 +576,7 @@ config = mlc.ConfigDict(
                 "eps": 1e-4,
                 "weight": 1.0,
             },
-            "lddt": {
+            "plddt_loss": {
                 "min_resolution": 0.1,
                 "max_resolution": 3.0,
                 "cutoff": 15.0,
