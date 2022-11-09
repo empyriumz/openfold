@@ -265,7 +265,7 @@ def relax_protein(
     )
 
     # Save the relaxed PDB.
-    relaxed_output_path = os.path.join(output_directory, f"{output_name}_relaxed.pdb")
+    relaxed_output_path = os.path.join(output_directory, f"{output_name}.pdb")
     with open(relaxed_output_path, "w") as fp:
         fp.write(relaxed_pdb_str)
 

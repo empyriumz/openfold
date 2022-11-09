@@ -259,7 +259,7 @@ def main(args):
         model = AlphaFold(config)
         model = model.eval()
         npz_path = os.path.join(
-            "/hpcgpfs01/scratch/xdai/openfold/params", "params_" + model_name + ".npz"
+            args.jax_param_path, "params_" + model_name + ".npz"
         )
         import_jax_weights_(model, npz_path, version=model_name)
         model = model.to(args.model_device)
@@ -380,7 +380,7 @@ def main(args):
                 best_protein = prep_output(
                     out, processed_feature_dict, feature_dict, feature_processor, args
                 )
-                output_name = f"{tag}_{model_name}"
+                output_name = "{}_{}_{:.2f}".format(tag, model_name, best_plddt)
                 if args.output_postfix is not None:
                     output_name = f"{output_name}_{args.output_postfix}"
 
@@ -392,31 +392,7 @@ def main(args):
                     args.output_dir,
                     output_name,
                 )
-        # amber_relaxer = relax.AmberRelaxation(
-        #     use_gpu=(args.model_device != "cpu"),
-        #     **config.relax,
-        # )
-
-        # # Relax the prediction.
-        # logger.info(f"Running relaxation on the best models")
-        # t = time.perf_counter()
-        # visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", default="")
-        # if "cuda" in args.model_device:
-        #     device_no = args.model_device.split(":")[-1]
-        #     os.environ["CUDA_VISIBLE_DEVICES"] = device_no
-        # relaxed_pdb_str, _, _ = amber_relaxer.process(prot=best_protein)
-        # os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
-        # logger.info("Relaxation time: {:.2f}".format(time.perf_counter() - t))
-
-        # # Save the relaxed PDB.
-        # relaxed_output_path = os.path.join(
-        #     args.output_dir, "{}_{:.2f}.pdb".format(output_name, best_plddt)
-        # )
-        # with open(relaxed_output_path, "w") as fp:
-        #     fp.write(relaxed_pdb_str)
-
-        # logger.info(f"Relaxed output written to {relaxed_output_path}...")
-
+        
     if args.save_outputs:
         output_dict_path = os.path.join(
             args.output_dir, f"{output_name}_output_dict.pkl"
@@ -467,7 +443,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--jax_param_path",
         type=str,
-        default=None,
+        default="/hpcgpfs01/scratch/xdai/openfold/params",
         help="""Path to JAX model parameters. If None, and openfold_checkpoint_path
              is also None, parameters are selected automatically according to 
              the model name from openfold/resources/params""",
@@ -535,12 +511,6 @@ if __name__ == "__main__":
     )
     add_data_args(parser)
     args = parser.parse_args()
-
-    if args.jax_param_path is None and args.openfold_checkpoint_path is None:
-        args.jax_param_path = os.path.join(
-            "/hpcgpfs01/scratch/xdai/openfold/params",
-            "params_" + args.config_preset + ".npz",
-        )
 
     if args.model_device == "cpu" and torch.cuda.is_available():
         logging.warning(
