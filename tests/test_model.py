@@ -48,6 +48,7 @@ class TestModel(unittest.TestCase):
         # deepspeed for this test
 
         model = AlphaFold(c)
+        model.eval()
 
         batch = {}
         tf = torch.randint(c.model.input_embedder.tf_dim - 1, size=(n_res,))
@@ -131,6 +132,4 @@ class TestModel(unittest.TestCase):
         out_repro = out_repro["sm"]["positions"][-1]
         out_repro = out_repro.squeeze(0)
 
-        print(torch.mean(torch.abs(out_gt - out_repro)))
-        print(torch.max(torch.abs(out_gt - out_repro)))
         self.assertTrue(torch.max(torch.abs(out_gt - out_repro)) < 1e-3)

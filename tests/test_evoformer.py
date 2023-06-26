@@ -128,6 +128,7 @@ class TestEvoformerStack(unittest.TestCase):
             torch.as_tensor(masks["pair"]).cuda(),
             chunk_size=4,
             _mask_trans=False,
+            inplace_safe=False,
         )
 
         out_repro_msa = out_repro_msa.cpu()
@@ -173,10 +174,10 @@ class TestExtraMSAStack(unittest.TestCase):
             ckpt=False,
             inf=inf,
             eps=eps,
-        ).eval()
+        ).eval().cuda()
 
-        m = torch.rand((batch_size, s_t, n_res, c_m))
-        z = torch.rand((batch_size, n_res, n_res, c_z))
+        m = torch.rand((batch_size, s_t, n_res, c_m), device="cuda")
+        z = torch.rand((batch_size, n_res, n_res, c_z), device="cuda")
         msa_mask = torch.randint(
             0,
             2,
@@ -185,6 +186,7 @@ class TestExtraMSAStack(unittest.TestCase):
                 s_t,
                 n_res,
             ),
+            device="cuda",
         )
         pair_mask = torch.randint(
             0,
@@ -194,6 +196,7 @@ class TestExtraMSAStack(unittest.TestCase):
                 n_res,
                 n_res,
             ),
+            device="cuda",
         )
 
         shape_z_before = z.shape

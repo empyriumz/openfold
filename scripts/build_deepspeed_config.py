@@ -295,6 +295,8 @@ if args.scheduler is not None:
         params["total_num_steps"] = args.warmup_decay_total_num_steps
         params["warmup_min_lr"] = args.warmup_decay_min_lr
         params["warmup_max_lr"] = args.warmup_decay_max_lr
+        params["warmup_num_steps"] = args.warmup_decay_num_steps
+        params["total_num_steps"] = args.warmup_decay_total_num_steps
     else:
         raise ValueError("Invalid scheduler")
 

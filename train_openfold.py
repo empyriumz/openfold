@@ -32,6 +32,9 @@ from openfold.utils.validation_metrics import (
     gdt_ts,
     gdt_ha,
 )
+from openfold.utils.import_weights import (
+    import_jax_weights_,
+)
 from scripts.zero_to_fp32 import (
     get_fp32_state_dict_from_zero_checkpoint,
     get_global_step_from_zero_checkpoint,
@@ -226,6 +229,17 @@ class OpenFoldWrapper(pl.LightningModule):
 
     def resume_last_lr_step(self, lr_step):
         self.last_lr_step = lr_step
+
+    def load_from_jax(self, jax_path):
+        model_basename = os.path.splitext(
+                os.path.basename(
+                    os.path.normpath(jax_path)
+                )
+        )[0]
+        model_version = "_".join(model_basename.split("_")[1:])
+        import_jax_weights_(
+                self.model, jax_path, version=model_version
+        )
 
 
 def main(args):
@@ -609,6 +623,9 @@ if __name__ == "__main__":
 
     if str(args.precision) == "16" and args.deepspeed_config_path is not None:
         raise ValueError("DeepSpeed and FP16 training are not compatible")
+
+    if(args.resume_from_jax_params is not None and args.resume_from_ckpt is not None):
+        raise ValueError("Choose between loading pretrained Jax-weights and a checkpoint-path")
 
     # This re-applies the training-time filters at the beginning of every epoch
     args.reload_dataloaders_every_n_epochs = 1

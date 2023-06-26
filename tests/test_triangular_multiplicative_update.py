@@ -119,7 +119,7 @@ class TestTriangularMultiplicativeUpdate(unittest.TestCase):
         out_stock = module(
             torch.as_tensor(pair_act, dtype=torch.float32).cuda(),
             mask=torch.as_tensor(pair_mask, dtype=torch.float32).cuda(),
-            _inplace=False,
+            inplace_safe=False,
         ).cpu()
 
         # This has to come second because inference mode is in-place

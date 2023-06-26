@@ -255,7 +255,8 @@ def relax_protein(
     if "cuda" in model_device:
         device_no = model_device.split(":")[-1]
         os.environ["CUDA_VISIBLE_DEVICES"] = device_no
-    relaxed_pdb_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein)
+    # the struct_str will contain either a PDB-format or a ModelCIF format string
+    struct_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein, cif_output=cif_output)
     os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
     relaxation_time = time.perf_counter() - t
 

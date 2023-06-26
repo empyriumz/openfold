@@ -509,6 +509,14 @@ if __name__ == "__main__":
         help=""""Whether to output (100 - pLDDT) in the B-factor column instead
                  of the pLDDT itself""",
     )
+    parser.add_argument(
+        "--long_sequence_inference", action="store_true", default=False,
+        help="""enable options to reduce memory usage at the cost of speed, helps longer sequences fit into GPU memory, see the README for details"""
+    )
+    parser.add_argument(
+        "--cif_output", action="store_true", default=False,
+        help="Output predicted models in ModelCIF format instead of PDB format (default)"
+    )
     add_data_args(parser)
     args = parser.parse_args()
 
