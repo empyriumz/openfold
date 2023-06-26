@@ -162,9 +162,7 @@ class TestLoss(unittest.TestCase):
         out_repro = tensor_tree_map(lambda x: x.cpu(), out_repro)
 
         for k in out_gt.keys():
-            self.assertTrue(
-                torch.max(torch.abs(out_gt[k] - out_repro[k])) < consts.eps
-            )
+            self.assertTrue(torch.max(torch.abs(out_gt[k] - out_repro[k])) < consts.eps)
 
     def test_run_between_residue_clash_loss(self):
         bs = consts.batch_size
@@ -223,9 +221,7 @@ class TestLoss(unittest.TestCase):
         out_repro = tensor_tree_map(lambda x: x.cpu(), out_repro)
 
         for k in out_gt.keys():
-            self.assertTrue(
-                torch.max(torch.abs(out_gt[k] - out_repro[k])) < consts.eps
-            )
+            self.assertTrue(torch.max(torch.abs(out_gt[k] - out_repro[k])) < consts.eps)
 
     @compare_utils.skip_unless_alphafold_installed()
     def test_compute_plddt_compare(self):
@@ -238,9 +234,7 @@ class TestLoss(unittest.TestCase):
         logits_t = torch.tensor(logits)
         out_repro = compute_plddt(logits_t)
 
-        self.assertTrue(
-            torch.max(torch.abs(out_gt - out_repro)) < consts.eps
-        )
+        self.assertTrue(torch.max(torch.abs(out_gt - out_repro)) < consts.eps)
 
     def test_find_structural_violations(self):
         n = consts.n_res
@@ -282,9 +276,9 @@ class TestLoss(unittest.TestCase):
             "atom14_atom_exists": np.random.randint(0, 2, (n_res, 14)),
             "residue_index": np.arange(n_res),
             "aatype": np.random.randint(0, 20, (n_res,)),
-            "residx_atom14_to_atom37": np.random.randint(
-                0, 37, (n_res, 14)
-            ).astype(np.int64),
+            "residx_atom14_to_atom37": np.random.randint(0, 37, (n_res, 14)).astype(
+                np.int64
+            ),
         }
 
         pred_pos = np.random.rand(n_res, 14, 3)
@@ -330,15 +324,9 @@ class TestLoss(unittest.TestCase):
             "seq_mask": np.random.randint(0, 2, (n_res,)).astype(np.float32),
             "aatype": np.random.randint(0, 20, (n_res,)),
             "atom14_gt_positions": np.random.rand(n_res, 14, 3),
-            "atom14_gt_exists": np.random.randint(0, 2, (n_res, 14)).astype(
-                np.float32
-            ),
-            "all_atom_mask": np.random.randint(0, 2, (n_res, 37)).astype(
-                np.float32
-            ),
-            "all_atom_positions": np.random.rand(n_res, 37, 3).astype(
-                np.float32
-            ),
+            "atom14_gt_exists": np.random.randint(0, 2, (n_res, 14)).astype(np.float32),
+            "all_atom_mask": np.random.randint(0, 2, (n_res, 37)).astype(np.float32),
+            "all_atom_positions": np.random.rand(n_res, 37, 3).astype(np.float32),
         }
 
         def _build_extra_feats_np():
@@ -361,9 +349,7 @@ class TestLoss(unittest.TestCase):
         out_repro = tensor_tree_map(lambda t: t.cpu(), out_repro)
 
         for k in out_repro:
-            self.assertTrue(
-                torch.max(torch.abs(out_gt[k] - out_repro[k])) < consts.eps
-            )
+            self.assertTrue(torch.max(torch.abs(out_gt[k] - out_repro[k])) < consts.eps)
 
     @compare_utils.skip_unless_alphafold_installed()
     def test_msa_loss_compare(self):
@@ -385,9 +371,7 @@ class TestLoss(unittest.TestCase):
 
         batch = {
             "true_msa": np.random.randint(0, 21, (n_res, n_seq)),
-            "bert_mask": np.random.randint(0, 2, (n_res, n_seq)).astype(
-                np.float32
-            ),
+            "bert_mask": np.random.randint(0, 2, (n_res, n_seq)).astype(np.float32),
         }
 
         out_gt = f.apply({}, None, value, batch)["loss"]
@@ -509,9 +493,7 @@ class TestLoss(unittest.TestCase):
             ret = {
                 "loss": jax.numpy.array(0.0),
             }
-            alphafold.model.folding.supervised_chi_loss(
-                ret, batch, value, c_chi_loss
-            )
+            alphafold.model.folding.supervised_chi_loss(ret, batch, value, c_chi_loss)
             return ret["loss"]
 
         f = hk.transform(run_supervised_chi_loss)
@@ -520,12 +502,10 @@ class TestLoss(unittest.TestCase):
 
         value = {
             "sidechains": {
-                "angles_sin_cos": np.random.rand(8, n_res, 7, 2).astype(
+                "angles_sin_cos": np.random.rand(8, n_res, 7, 2).astype(np.float32),
+                "unnormalized_angles_sin_cos": np.random.rand(8, n_res, 7, 2).astype(
                     np.float32
                 ),
-                "unnormalized_angles_sin_cos": np.random.rand(
-                    8, n_res, 7, 2
-                ).astype(np.float32),
             }
         }
 
@@ -571,9 +551,7 @@ class TestLoss(unittest.TestCase):
                 "loss": np.array(0.0).astype(np.float32),
             }
             value = {}
-            value[
-                "violations"
-            ] = alphafold.model.folding.find_structural_violations(
+            value["violations"] = alphafold.model.folding.find_structural_violations(
                 batch,
                 atom14_pred_pos,
                 c_viol,
@@ -633,24 +611,16 @@ class TestLoss(unittest.TestCase):
 
         value = {
             "predicted_lddt": {
-                "logits": np.random.rand(n_res, c_plddt.num_bins).astype(
-                    np.float32
-                ),
+                "logits": np.random.rand(n_res, c_plddt.num_bins).astype(np.float32),
             },
             "structure_module": {
-                "final_atom_positions": np.random.rand(n_res, 37, 3).astype(
-                    np.float32
-                ),
+                "final_atom_positions": np.random.rand(n_res, 37, 3).astype(np.float32),
             },
         }
 
         batch = {
-            "all_atom_positions": np.random.rand(n_res, 37, 3).astype(
-                np.float32
-            ),
-            "all_atom_mask": np.random.randint(0, 2, (n_res, 37)).astype(
-                np.float32
-            ),
+            "all_atom_positions": np.random.rand(n_res, 37, 3).astype(np.float32),
+            "all_atom_mask": np.random.randint(0, 2, (n_res, 37)).astype(np.float32),
             "resolution": np.array(1.0).astype(np.float32),
         }
 
@@ -714,7 +684,7 @@ class TestLoss(unittest.TestCase):
             batch["backbone_affine_tensor"]
         )
         batch["backbone_rigid_mask"] = batch["backbone_affine_mask"]
-        
+
         out_repro = backbone_loss(traj=value["traj"], **{**batch, **c_sm})
         out_repro = out_repro.cpu()
 
@@ -736,9 +706,7 @@ class TestLoss(unittest.TestCase):
             }
             v = {}
             v["sidechains"] = {}
-            v["sidechains"][
-                "frames"
-            ] = alphafold.model.r3.rigids_from_tensor4x4(
+            v["sidechains"]["frames"] = alphafold.model.r3.rigids_from_tensor4x4(
                 value["sidechains"]["frames"]
             )
             v["sidechains"]["atom_pos"] = alphafold.model.r3.vecs_from_tensor(
@@ -762,18 +730,10 @@ class TestLoss(unittest.TestCase):
         batch = {
             "seq_mask": np.random.randint(0, 2, (n_res,)).astype(np.float32),
             "aatype": np.random.randint(0, 20, (n_res,)),
-            "atom14_gt_positions": np.random.rand(n_res, 14, 3).astype(
-                np.float32
-            ),
-            "atom14_gt_exists": np.random.randint(0, 2, (n_res, 14)).astype(
-                np.float32
-            ),
-            "all_atom_positions": np.random.rand(n_res, 37, 3).astype(
-                np.float32
-            ),
-            "all_atom_mask": np.random.randint(0, 2, (n_res, 37)).astype(
-                np.float32
-            ),
+            "atom14_gt_positions": np.random.rand(n_res, 14, 3).astype(np.float32),
+            "atom14_gt_exists": np.random.randint(0, 2, (n_res, 14)).astype(np.float32),
+            "all_atom_positions": np.random.rand(n_res, 37, 3).astype(np.float32),
+            "all_atom_mask": np.random.randint(0, 2, (n_res, 37)).astype(np.float32),
         }
 
         def _build_extra_feats_np():

@@ -48,9 +48,7 @@ class TestTriangularMultiplicativeUpdate(unittest.TestCase):
         self.assertTrue(shape_before == shape_after)
 
     def _tri_mul_compare(self, incoming=False):
-        name = "triangle_multiplication_" + (
-            "incoming" if incoming else "outgoing"
-        )
+        name = "triangle_multiplication_" + ("incoming" if incoming else "outgoing")
 
         def run_tri_mul(pair_act, pair_mask):
             config = compare_utils.get_alphafold_config()
@@ -75,8 +73,7 @@ class TestTriangularMultiplicativeUpdate(unittest.TestCase):
 
         # Fetch pretrained parameters (but only from one block)]
         params = compare_utils.fetch_alphafold_module_weights(
-            "alphafold/alphafold_iteration/evoformer/evoformer_iteration/"
-            + name
+            "alphafold/alphafold_iteration/evoformer/evoformer_iteration/" + name
         )
         params = tree_map(lambda n: n[0], params, jax.numpy.DeviceArray)
 
@@ -92,7 +89,8 @@ class TestTriangularMultiplicativeUpdate(unittest.TestCase):
         out_repro = module(
             torch.as_tensor(pair_act, dtype=torch.float32).cuda(),
             mask=torch.as_tensor(pair_mask, dtype=torch.float32).cuda(),
-            _inplace=True, _inplace_chunk_size=4,
+            _inplace=True,
+            _inplace_chunk_size=4,
         ).cpu()
 
         self.assertTrue(torch.mean(torch.abs(out_gt - out_repro)) < consts.eps)
@@ -107,11 +105,10 @@ class TestTriangularMultiplicativeUpdate(unittest.TestCase):
 
     def _tri_mul_inplace(self, incoming=False):
         n_res = consts.n_res
-        
+
         pair_act = np.random.rand(n_res, n_res, consts.c_z).astype(np.float32)
         pair_mask = np.random.randint(low=0, high=2, size=(n_res, n_res))
         pair_mask = pair_mask.astype(np.float32)
-
 
         model = compare_utils.get_global_pretrained_openfold()
         module = (
@@ -124,12 +121,13 @@ class TestTriangularMultiplicativeUpdate(unittest.TestCase):
             mask=torch.as_tensor(pair_mask, dtype=torch.float32).cuda(),
             _inplace=False,
         ).cpu()
-        
+
         # This has to come second because inference mode is in-place
         out_inplace = module(
             torch.as_tensor(pair_act, dtype=torch.float32).cuda(),
             mask=torch.as_tensor(pair_mask, dtype=torch.float32).cuda(),
-            _inplace=True, _inplace_chunk_size=2,
+            _inplace=True,
+            _inplace_chunk_size=2,
         ).cpu()
 
         self.assertTrue(torch.mean(torch.abs(out_stock - out_inplace)) < consts.eps)
@@ -139,6 +137,7 @@ class TestTriangularMultiplicativeUpdate(unittest.TestCase):
 
     def test_tri_mul_in_inference(self):
         self._tri_mul_inplace(incoming=True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,9 +41,7 @@ class TestTemplatePointwiseAttention(unittest.TestCase):
         n_res = consts.n_res
         inf = 1e7
 
-        tpa = TemplatePointwiseAttention(
-            c_t, c_z, c, no_heads, inf=inf
-        )
+        tpa = TemplatePointwiseAttention(c_t, c_z, c, no_heads, inf=inf)
 
         t = torch.rand((batch_size, n_seq, n_res, n_res, c_t))
         z = torch.rand((batch_size, n_res, n_res, c_z))
@@ -111,9 +109,9 @@ class TestTemplatePairStack(unittest.TestCase):
         n_res = consts.n_res
 
         pair_act = np.random.rand(n_res, n_res, consts.c_t).astype(np.float32)
-        pair_mask = np.random.randint(
-            low=0, high=2, size=(n_res, n_res)
-        ).astype(np.float32)
+        pair_mask = np.random.randint(low=0, high=2, size=(n_res, n_res)).astype(
+            np.float32
+        )
 
         params = compare_utils.fetch_alphafold_module_weights(
             "alphafold/alphafold_iteration/evoformer/template_embedding/"

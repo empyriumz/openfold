@@ -71,14 +71,9 @@ class Jackhmmer:
         self.database_path = database_path
         self.num_streamed_chunks = num_streamed_chunks
 
-        if (
-            not os.path.exists(self.database_path)
-            and num_streamed_chunks is None
-        ):
+        if not os.path.exists(self.database_path) and num_streamed_chunks is None:
             logging.error("Could not find Jackhmmer database %s", database_path)
-            raise ValueError(
-                f"Could not find Jackhmmer database {database_path}"
-            )
+            raise ValueError(f"Could not find Jackhmmer database {database_path}")
 
         self.n_cpu = n_cpu
         self.n_iter = n_iter
@@ -140,19 +135,13 @@ class Jackhmmer:
             if self.incdom_e is not None:
                 cmd_flags.extend(["--incdomE", str(self.incdom_e)])
 
-            cmd = (
-                [self.binary_path]
-                + cmd_flags
-                + [input_fasta_path, database_path]
-            )
+            cmd = [self.binary_path] + cmd_flags + [input_fasta_path, database_path]
 
             logging.info('Launching subprocess "%s"', " ".join(cmd))
             process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
-            with utils.timing(
-                f"Jackhmmer ({os.path.basename(database_path)}) query"
-            ):
+            with utils.timing(f"Jackhmmer ({os.path.basename(database_path)}) query"):
                 _, stderr = process.communicate()
                 retcode = process.wait()
 

@@ -18,6 +18,7 @@ import io
 from openfold.np import residue_constants
 from Bio import PDB
 import numpy as np
+
 try:
     # openmm >= 7.6
     from openmm import app as openmm_app
@@ -87,6 +88,4 @@ def assert_equal_nonterminal_atom_types(
     oxt = residue_constants.atom_order["OXT"]
     no_oxt_mask = np.ones(shape=atom_mask.shape, dtype=np.bool)
     no_oxt_mask[..., oxt] = False
-    np.testing.assert_almost_equal(
-        ref_atom_mask[no_oxt_mask], atom_mask[no_oxt_mask]
-    )
+    np.testing.assert_almost_equal(ref_atom_mask[no_oxt_mask], atom_mask[no_oxt_mask])

@@ -41,9 +41,7 @@ class TestImportWeights(unittest.TestCase):
             # Normal linear weight
             (
                 torch.as_tensor(
-                    data[
-                        prefix + "structure_module/initial_projection//weights"
-                    ]
+                    data[prefix + "structure_module/initial_projection//weights"]
                 ).transpose(-1, -2),
                 model.structure_module.linear_in.weight,
             ),

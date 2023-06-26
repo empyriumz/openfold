@@ -55,12 +55,8 @@ class HHSearch:
 
         for database_path in self.databases:
             if not glob.glob(database_path + "_*"):
-                logging.error(
-                    "Could not find HHsearch database %s", database_path
-                )
-                raise ValueError(
-                    f"Could not find HHsearch database {database_path}"
-                )
+                logging.error("Could not find HHsearch database %s", database_path)
+                raise ValueError(f"Could not find HHsearch database {database_path}")
 
     def query(self, a3m: str) -> str:
         """Queries the database using HHsearch using a given a3m."""

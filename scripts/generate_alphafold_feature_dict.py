@@ -39,6 +39,7 @@ def main(args):
     with open(os.path.join(args.output_dir, "feature_dict.pickle"), "wb") as fp:
         pickle.dump(feature_dict, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("fasta_path", type=str)

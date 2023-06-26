@@ -28,6 +28,7 @@ from openfold.utils.import_weights import (
     import_jax_weights_,
 )
 from openfold.model.model import AlphaFold
+
 logging.basicConfig()
 logger = logging.getLogger(__file__)
 logger.setLevel(level=logging.INFO)
@@ -188,6 +189,7 @@ def prep_output(out, batch, feature_dict, feature_processor, args):
 
     return unrelaxed_protein
 
+
 def generate_feature_dict(
     tags,
     seqs,
@@ -258,9 +260,7 @@ def main(args):
         config = model_config(model_name)
         model = AlphaFold(config)
         model = model.eval()
-        npz_path = os.path.join(
-            args.jax_param_path, "params_" + model_name + ".npz"
-        )
+        npz_path = os.path.join(args.jax_param_path, "params_" + model_name + ".npz")
         import_jax_weights_(model, npz_path, version=model_name)
         model = model.to(args.model_device)
         if args.trace_model:
@@ -386,13 +386,13 @@ def main(args):
 
     if not args.skip_relaxation:
         relax_protein(
-                    config,
-                    args.model_device,
-                    best_protein,
-                    args.output_dir,
-                    output_name,
-                )
-        
+            config,
+            args.model_device,
+            best_protein,
+            args.output_dir,
+            output_name,
+        )
+
     if args.save_outputs:
         output_dict_path = os.path.join(
             args.output_dir, f"{output_name}_output_dict.pkl"

@@ -5,6 +5,7 @@ precomputed_alignments/
 inference_output/
 input_mmcif/
 train_output/
+metal_ion_alignments/
 *.pdb
 # Byte-compiled / optimized / DLL files
 __pycache__/

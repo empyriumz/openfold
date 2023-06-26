@@ -47,11 +47,7 @@ class TestTriangularAttention(unittest.TestCase):
         self.assertTrue(shape_before == shape_after)
 
     def _tri_att_compare(self, starting=False):
-        name = (
-            "triangle_attention_"
-            + ("starting" if starting else "ending")
-            + "_node"
-        )
+        name = "triangle_attention_" + ("starting" if starting else "ending") + "_node"
 
         def run_tri_att(pair_act, pair_mask):
             config = compare_utils.get_alphafold_config()
@@ -75,8 +71,7 @@ class TestTriangularAttention(unittest.TestCase):
 
         # Fetch pretrained parameters (but only from one block)]
         params = compare_utils.fetch_alphafold_module_weights(
-            "alphafold/alphafold_iteration/evoformer/evoformer_iteration/"
-            + name
+            "alphafold/alphafold_iteration/evoformer/evoformer_iteration/" + name
         )
         params = tree_map(lambda n: n[0], params, jax.numpy.DeviceArray)
 

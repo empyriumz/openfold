@@ -90,12 +90,8 @@ class TestStructureModule(unittest.TestCase):
         out = sm(s, z, f)
 
         self.assertTrue(out["frames"].shape == (no_layers, batch_size, n, 7))
-        self.assertTrue(
-            out["angles"].shape == (no_layers, batch_size, n, no_angles, 2)
-        )
-        self.assertTrue(
-            out["positions"].shape == (no_layers, batch_size, n, 14, 3)
-        )
+        self.assertTrue(out["angles"].shape == (no_layers, batch_size, n, no_angles, 2))
+        self.assertTrue(out["positions"].shape == (no_layers, batch_size, n, 14, 3))
 
     def test_structure_module_transition_shape(self):
         batch_size = 2
@@ -199,9 +195,7 @@ class TestInvariantPointAttention(unittest.TestCase):
 
         r = Rigid(rots, trans)
 
-        ipa = InvariantPointAttention(
-            c_m, c_z, c_hidden, no_heads, no_qp, no_vp
-        )
+        ipa = InvariantPointAttention(c_m, c_z, c_hidden, no_heads, no_qp, no_vp)
 
         shape_before = s.shape
         s = ipa(s, z, r, mask)
@@ -237,9 +231,7 @@ class TestInvariantPointAttention(unittest.TestCase):
         affines = random_affines_4x4((n_res,))
         rigids = alphafold.model.r3.rigids_from_tensor4x4(affines)
         quats = alphafold.model.r3.rigids_to_quataffine(rigids)
-        transformations = Rigid.from_tensor_4x4(
-            torch.as_tensor(affines).float().cuda()
-        )
+        transformations = Rigid.from_tensor_4x4(torch.as_tensor(affines).float().cuda())
 
         sample_affine = quats
 
