@@ -122,10 +122,10 @@ def make_sequence_features(
         map_unknown_to_x=True,
     )
     features["between_segment_residues"] = np.zeros((num_res,), dtype=np.int32)
-    features["domain_name"] = np.array([description.encode("utf-8")], dtype=np.object_)
+    features["domain_name"] = np.array([description.encode("utf-8")], dtype=object)
     features["residue_index"] = np.array(range(num_res), dtype=np.int32)
     features["seq_length"] = np.array([num_res] * num_res, dtype=np.int32)
-    features["sequence"] = np.array([sequence.encode("utf-8")], dtype=np.object_)
+    features["sequence"] = np.array([sequence.encode("utf-8")], dtype=object)
     return features
 
 
@@ -157,7 +157,7 @@ def make_mmcif_features(
     )
 
     mmcif_feats["release_date"] = np.array(
-        [mmcif_object.header["release_date"].encode("utf-8")], dtype=np.object_
+        [mmcif_object.header["release_date"].encode("utf-8")], dtype=object
     )
 
     mmcif_feats["is_distillation"] = np.array(0.0, dtype=np.float32)
@@ -491,7 +491,7 @@ class DataPipeline:
                 msa = fp.read(size).decode("utf-8")
                 return msa
 
-            for (name, start, size) in alignment_index["files"]:
+            for name, start, size in alignment_index["files"]:
                 ext = os.path.splitext(name)[-1]
 
                 if ext == ".a3m":
@@ -539,7 +539,7 @@ class DataPipeline:
                 fp.seek(start)
                 return fp.read(size).decode("utf-8")
 
-            for (name, start, size) in alignment_index["files"]:
+            for name, start, size in alignment_index["files"]:
                 ext = os.path.splitext(name)[-1]
 
                 if ext == ".hhr":

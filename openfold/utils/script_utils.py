@@ -14,9 +14,6 @@ from openfold.utils.import_weights import (
     import_jax_weights_,
 )
 
-from pytorch_lightning.utilities.deepspeed import (
-    convert_zero_checkpoint_to_fp32_state_dict,
-)
 
 logging.basicConfig()
 logger = logging.getLogger(__file__)
@@ -71,6 +68,10 @@ def load_models_from_command_line(
             yield model, output_directory
 
     if openfold_checkpoint_path:
+        from pytorch_lightning.utilities.deepspeed import (
+            convert_zero_checkpoint_to_fp32_state_dict,
+        )
+
         for path in openfold_checkpoint_path.split(","):
             model = AlphaFold(config)
             model = model.eval()
@@ -243,7 +244,12 @@ def prep_output(
 
 
 def relax_protein(
-    config, model_device, unrelaxed_protein, output_directory, output_name
+    config,
+    model_device,
+    unrelaxed_protein,
+    output_directory,
+    output_name,
+    cif_output=False,
 ):
     amber_relaxer = relax.AmberRelaxation(
         use_gpu=(model_device != "cpu"),
@@ -256,7 +262,9 @@ def relax_protein(
         device_no = model_device.split(":")[-1]
         os.environ["CUDA_VISIBLE_DEVICES"] = device_no
     # the struct_str will contain either a PDB-format or a ModelCIF format string
-    struct_str, _, _ = amber_relaxer.process(prot=unrelaxed_protein, cif_output=cif_output)
+    struct_str, _, _ = amber_relaxer.process(
+        prot=unrelaxed_protein, cif_output=cif_output
+    )
     os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
     relaxation_time = time.perf_counter() - t
 
@@ -266,8 +274,11 @@ def relax_protein(
     )
 
     # Save the relaxed PDB.
-    relaxed_output_path = os.path.join(output_directory, f"{output_name}.pdb")
+    suffix = "_relaxed.pdb"
+    if cif_output:
+        suffix = "_relaxed.cif"
+    relaxed_output_path = os.path.join(output_directory, f"{output_name}{suffix}")
     with open(relaxed_output_path, "w") as fp:
-        fp.write(relaxed_pdb_str)
+        fp.write(struct_str)
 
     logger.info(f"Relaxed output written to {relaxed_output_path}...")

@@ -34,9 +34,6 @@ logger = logging.getLogger(__file__)
 logger.setLevel(level=logging.INFO)
 
 import pickle
-from pytorch_lightning.utilities.deepspeed import (
-    convert_zero_checkpoint_to_fp32_state_dict,
-)
 import random
 import time
 import torch
@@ -251,10 +248,11 @@ def list_files_with_extensions(dir, extensions):
 def main(args):
     # Create the output directory
     os.makedirs(args.output_dir, exist_ok=True)
-    if args.custom_template is None:
-        model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
-    else:
-        model_list = ["model_1", "model_2"]
+    # if args.custom_template is None:
+    #     model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    # else:
+    #     model_list = ["model_1", "model_2"]
+    model_list = ["model_1", "model_3"]
     best_plddt = 0
     for model_name in model_list:
         config = model_config(model_name)
@@ -510,12 +508,16 @@ if __name__ == "__main__":
                  of the pLDDT itself""",
     )
     parser.add_argument(
-        "--long_sequence_inference", action="store_true", default=False,
-        help="""enable options to reduce memory usage at the cost of speed, helps longer sequences fit into GPU memory, see the README for details"""
+        "--long_sequence_inference",
+        action="store_true",
+        default=False,
+        help="""enable options to reduce memory usage at the cost of speed, helps longer sequences fit into GPU memory, see the README for details""",
     )
     parser.add_argument(
-        "--cif_output", action="store_true", default=False,
-        help="Output predicted models in ModelCIF format instead of PDB format (default)"
+        "--cif_output",
+        action="store_true",
+        default=False,
+        help="Output predicted models in ModelCIF format instead of PDB format (default)",
     )
     add_data_args(parser)
     args = parser.parse_args()

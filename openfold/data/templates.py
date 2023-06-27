@@ -88,8 +88,8 @@ TEMPLATE_FEATURES = {
     "template_aatype": np.int64,
     "template_all_atom_mask": np.float32,
     "template_all_atom_positions": np.float32,
-    "template_domain_names": np.object,
-    "template_sequence": np.object,
+    "template_domain_names": object,
+    "template_sequence": object,
     "template_sum_probs": np.float32,
 }
 
@@ -141,11 +141,12 @@ def _replace_obsolete_references(obsolete_mapping) -> Mapping[str, str]:
         if v in obsolete_keys:
             return _new_target(v)
         return v
-    
+
     for k in obsolete_keys:
         obsolete_new[k] = _new_target(k)
 
     return obsolete_new
+
 
 def _parse_obsolete(obsolete_file_path: str) -> Mapping[str, str]:
     """Parses the data file from PDB that lists which PDB ids are obsolete."""
@@ -815,7 +816,7 @@ def _process_single_hit(
     # remove gaps (which regardless have a missing confidence score).
     template_sequence = hit.hit_sequence.replace("-", "")
 
-    cif_path = os.path.join(mmcif_dir, hit_pdb_code + ".cif")
+    cif_path = os.path.join(mmcif_dir, hit_pdb_code + ".cif.gz")
     logging.info(
         "Reading PDB entry from %s. Query: %s, template: %s",
         cif_path,
@@ -823,7 +824,11 @@ def _process_single_hit(
         template_sequence,
     )
     # Fail if we can't find the mmCIF file.
-    with open(cif_path, "r") as cif_file:
+    # with open(cif_path, "r") as cif_file:
+    #     cif_string = cif_file.read()
+    import gzip
+
+    with gzip.open(cif_path, "r") as cif_file:
         cif_string = cif_file.read()
 
     parsing_result = mmcif_parsing.parse(file_id=hit_pdb_code, mmcif_string=cif_string)
@@ -907,7 +912,6 @@ def get_custom_template_features(
     chain_id: str,
     kalign_binary_path: str,
 ):
-
     with open(mmcif_path, "r") as mmcif_path:
         cif_string = mmcif_path.read()
 
@@ -992,7 +996,7 @@ class TemplateHitFeaturizer:
                 * Any feature computation errors.
         """
         self._mmcif_dir = mmcif_dir
-        if not glob.glob(os.path.join(self._mmcif_dir, "*.cif")):
+        if not glob.glob(os.path.join(self._mmcif_dir, "*.cif.gz")):
             logging.error("Could not find CIFs in %s", self._mmcif_dir)
             raise ValueError(f"Could not find CIFs in {self._mmcif_dir}")
 

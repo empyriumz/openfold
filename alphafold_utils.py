@@ -122,7 +122,6 @@ def predict_structure(
     big_improvement=5,
     confidence_dict=None,
 ):
-
     """Predicts structure using AlphaFold for the given sequence."""
     import numpy as np
 
@@ -658,7 +657,6 @@ def get_cif_file_list(
     cif_dir=None,
     other_cif_dir=None,
 ):
-
     if cif_dir is not None:
         cif_files = list(cif_dir.glob("*"))
     else:

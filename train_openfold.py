@@ -231,15 +231,11 @@ class OpenFoldWrapper(pl.LightningModule):
         self.last_lr_step = lr_step
 
     def load_from_jax(self, jax_path):
-        model_basename = os.path.splitext(
-                os.path.basename(
-                    os.path.normpath(jax_path)
-                )
-        )[0]
+        model_basename = os.path.splitext(os.path.basename(os.path.normpath(jax_path)))[
+            0
+        ]
         model_version = "_".join(model_basename.split("_")[1:])
-        import_jax_weights_(
-                self.model, jax_path, version=model_version
-        )
+        import_jax_weights_(self.model, jax_path, version=model_version)
 
 
 def main(args):
@@ -624,8 +620,10 @@ if __name__ == "__main__":
     if str(args.precision) == "16" and args.deepspeed_config_path is not None:
         raise ValueError("DeepSpeed and FP16 training are not compatible")
 
-    if(args.resume_from_jax_params is not None and args.resume_from_ckpt is not None):
-        raise ValueError("Choose between loading pretrained Jax-weights and a checkpoint-path")
+    if args.resume_from_jax_params is not None and args.resume_from_ckpt is not None:
+        raise ValueError(
+            "Choose between loading pretrained Jax-weights and a checkpoint-path"
+        )
 
     # This re-applies the training-time filters at the beginning of every epoch
     args.reload_dataloaders_every_n_epochs = 1

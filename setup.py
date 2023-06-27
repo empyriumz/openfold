@@ -13,13 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from setuptools import setup, Extension, find_packages
+from setuptools import setup, find_packages
 import subprocess
 
-import torch
-from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDAExtension, CUDA_HOME
+from torch.utils.cpp_extension import (
+    BuildExtension,
+    CUDAExtension,
+    CUDA_HOME,
+)
 
-from scripts.utils import get_nvidia_cc
 
 
 version_dependent_macros = [

@@ -71,7 +71,6 @@ def parse_model_state(file):
 
 
 def parse_optim_states(files, ds_checkpoint_dir):
-
     total_files = len(files)
     state_dicts = []
     for f in files:
@@ -157,7 +156,6 @@ def _get_fp32_state_dict_from_zero_checkpoint(ds_checkpoint_dir):
 def _get_fp32_state_dict_from_zero2_checkpoint(
     world_size, param_shapes, fp32_flat_groups, buffers
 ):
-
     # Reconstruction protocol:
     #
     # XXX: document this
@@ -210,7 +208,6 @@ def _get_fp32_state_dict_from_zero2_checkpoint(
         offset = 0
         avail_numel = full_single_fp32_vector.numel()
         for name, shape in shapes.items():
-
             unpartitioned_numel = shape.numel()
             total_numel += unpartitioned_numel
             total_params += 1
@@ -265,7 +262,6 @@ def zero3_partitioned_param_info(unpartitioned_numel, world_size):
 def _get_fp32_state_dict_from_zero3_checkpoint(
     world_size, param_shapes, fp32_flat_groups, buffers
 ):
-
     # Reconstruction protocol: For zero3 we need to zip the partitions together at boundary of each
     # param, re-consolidating each param, while dealing with padding if any
 
@@ -297,7 +293,6 @@ def _get_fp32_state_dict_from_zero3_checkpoint(
     total_numel = 0
     total_params = 0
     for name, shape in param_shapes.items():
-
         unpartitioned_numel = shape.numel()
         total_numel += unpartitioned_numel
         total_params += 1
@@ -458,7 +453,6 @@ def get_global_step_from_zero_checkpoint(checkpoint_dir):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "checkpoint_dir",

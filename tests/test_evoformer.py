@@ -158,23 +158,27 @@ class TestExtraMSAStack(unittest.TestCase):
         inf = 1e9
         eps = 1e-10
 
-        es = ExtraMSAStack(
-            c_m,
-            c_z,
-            c_hidden_msa_att,
-            c_hidden_opm,
-            c_hidden_mul,
-            c_hidden_tri_att,
-            no_heads_msa,
-            no_heads_pair,
-            no_blocks,
-            transition_n,
-            msa_dropout,
-            pair_stack_dropout,
-            ckpt=False,
-            inf=inf,
-            eps=eps,
-        ).eval().cuda()
+        es = (
+            ExtraMSAStack(
+                c_m,
+                c_z,
+                c_hidden_msa_att,
+                c_hidden_opm,
+                c_hidden_mul,
+                c_hidden_tri_att,
+                no_heads_msa,
+                no_heads_pair,
+                no_blocks,
+                transition_n,
+                msa_dropout,
+                pair_stack_dropout,
+                ckpt=False,
+                inf=inf,
+                eps=eps,
+            )
+            .eval()
+            .cuda()
+        )
 
         m = torch.rand((batch_size, s_t, n_res, c_m), device="cuda")
         z = torch.rand((batch_size, n_res, n_res, c_z), device="cuda")

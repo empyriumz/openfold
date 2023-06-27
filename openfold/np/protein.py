@@ -415,7 +415,7 @@ def to_modelcif(prot: Protein) -> str:
     if chain_index is None:
         chain_index = [0 for i in range(n)]
 
-    system = modelcif.System(title='OpenFold prediction')
+    system = modelcif.System(title="OpenFold prediction")
 
     # Finding chains and creating entities
     seqs = {}
@@ -442,7 +442,7 @@ def to_modelcif(prot: Protein) -> str:
     # adding 1 entity per unique sequence
     entities_map = {}
     for key, value in unique_seqs.items():
-        model_e = modelcif.Entity(key, description='Model subunit')
+        model_e = modelcif.Entity(key, description="Model subunit")
         for chain_idx in value:
             entities_map[chain_idx] = model_e
 
@@ -451,9 +451,13 @@ def to_modelcif(prot: Protein) -> str:
     for chain_idx in set(chain_index):
         # Define the model assembly
         chain_id = chain_tags[chain_idx]
-        asym = modelcif.AsymUnit(entities_map[chain_idx], details='Model subunit %s' % chain_id, id=chain_id)
+        asym = modelcif.AsymUnit(
+            entities_map[chain_idx], details="Model subunit %s" % chain_id, id=chain_id
+        )
         asym_unit_map[chain_idx] = asym
-    modeled_assembly = modelcif.Assembly(asym_unit_map.values(), name='Modeled assembly')
+    modeled_assembly = modelcif.Assembly(
+        asym_unit_map.values(), name="Modeled assembly"
+    )
 
     class _LocalPLDDT(modelcif.qa_metric.Local, modelcif.qa_metric.PLDDT):
         name = "pLDDT"
@@ -470,16 +474,25 @@ def to_modelcif(prot: Protein) -> str:
             # Add all atom sites.
             for i in range(n):
                 for atom_name, pos, mask, b_factor in zip(
-                        atom_types, atom_positions[i], atom_mask[i], b_factors[i]
+                    atom_types, atom_positions[i], atom_mask[i], b_factors[i]
                 ):
                     if mask < 0.5:
                         continue
-                    element = atom_name[0]  # Protein supports only C, N, O, S, this works.
+                    element = atom_name[
+                        0
+                    ]  # Protein supports only C, N, O, S, this works.
                     yield modelcif.model.Atom(
-                        asym_unit=asym_unit_map[chain_index[i]], type_symbol=element,
-                        seq_id=residue_index[i], atom_id=atom_name,
-                        x=pos[0], y=pos[1], z=pos[2],
-                        het=False, biso=b_factor, occupancy=1.00)
+                        asym_unit=asym_unit_map[chain_index[i]],
+                        type_symbol=element,
+                        seq_id=residue_index[i],
+                        atom_id=atom_name,
+                        x=pos[0],
+                        y=pos[1],
+                        z=pos[2],
+                        het=False,
+                        biso=b_factor,
+                        occupancy=1.00,
+                    )
 
         def add_scores(self):
             # local scores
@@ -500,15 +513,18 @@ def to_modelcif(prot: Protein) -> str:
                     plddt = plddt_per_residue[chain_idx][residue_idx]
                     plddts.append(plddt)
                     self.qa_metrics.append(
-                        _LocalPLDDT(asym_unit_map[chain_idx].residue(residue_idx), plddt))
+                        _LocalPLDDT(
+                            asym_unit_map[chain_idx].residue(residue_idx), plddt
+                        )
+                    )
             # global score
             self.qa_metrics.append((_GlobalPLDDT(np.mean(plddts))))
 
     # Add the model and modeling protocol to the file and write them out:
-    model = _MyModel(assembly=modeled_assembly, name='Best scoring model')
+    model = _MyModel(assembly=modeled_assembly, name="Best scoring model")
     model.add_scores()
 
-    model_group = modelcif.model.ModelGroup([model], name='All models')
+    model_group = modelcif.model.ModelGroup([model], name="All models")
     system.model_groups.append(model_group)
 
     fh = io.StringIO()

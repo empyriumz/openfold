@@ -44,10 +44,10 @@ def make_sequence_features(
         map_unknown_to_x=True,
     )
     features["between_segment_residues"] = np.zeros((num_res,), dtype=np.int32)
-    features["domain_name"] = np.array([description.encode("utf-8")], dtype=np.object_)
+    features["domain_name"] = np.array([description.encode("utf-8")], dtype=object)
     features["residue_index"] = np.array(range(num_res), dtype=np.int32)
     features["seq_length"] = np.array([num_res] * num_res, dtype=np.int32)
-    features["sequence"] = np.array([sequence.encode("utf-8")], dtype=np.object_)
+    features["sequence"] = np.array([sequence.encode("utf-8")], dtype=object)
     return features
 
 
@@ -82,7 +82,7 @@ def make_msa_features(msas: Sequence[parsers.Msa]) -> FeatureDict:
     features["deletion_matrix_int"] = np.array(deletion_matrix, dtype=np.int32)
     features["msa"] = np.array(int_msa, dtype=np.int32)
     features["num_alignments"] = np.array([num_alignments] * num_res, dtype=np.int32)
-    features["msa_species_identifiers"] = np.array(species_ids, dtype=np.object_)
+    features["msa_species_identifiers"] = np.array(species_ids, dtype=object)
     return features
 
 
