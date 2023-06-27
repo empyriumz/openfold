@@ -121,72 +121,6 @@ def run_model(model, batch, tag, args):
     return out
 
 
-def prep_output(out, batch, feature_dict, feature_processor, args):
-    plddt = out["plddt"]
-    plddt_b_factors = np.repeat(
-        plddt[..., None], residue_constants.atom_type_num, axis=-1
-    )
-
-    if args.subtract_plddt:
-        plddt_b_factors = 100 - plddt_b_factors
-
-    # Prep protein metadata
-    template_domain_names = []
-    template_chain_index = None
-    if (
-        feature_processor.config.common.use_templates
-        and "template_domain_names" in feature_dict
-    ):
-        template_domain_names = [
-            t.decode("utf-8") for t in feature_dict["template_domain_names"]
-        ]
-
-        # This works because templates are not shuffled during inference
-        template_domain_names = template_domain_names[
-            : feature_processor.config.predict.max_templates
-        ]
-
-        if "template_chain_index" in feature_dict:
-            template_chain_index = feature_dict["template_chain_index"]
-            template_chain_index = template_chain_index[
-                : feature_processor.config.predict.max_templates
-            ]
-
-    no_recycling = feature_processor.config.common.max_recycling_iters
-    remark = ", ".join(
-        [
-            f"no_recycling={no_recycling}",
-            f"max_templates={feature_processor.config.predict.max_templates}",
-            f"config_preset={args.config_preset}",
-        ]
-    )
-
-    # For multi-chain FASTAs
-    ri = feature_dict["residue_index"]
-    chain_index = (ri - np.arange(ri.shape[0])) / args.multimer_ri_gap
-    chain_index = chain_index.astype(np.int64)
-    cur_chain = 0
-    prev_chain_max = 0
-    for i, c in enumerate(chain_index):
-        if c != cur_chain:
-            cur_chain = c
-            prev_chain_max = i + cur_chain * args.multimer_ri_gap
-
-        batch["residue_index"][i] -= prev_chain_max
-
-    unrelaxed_protein = protein.from_prediction(
-        features=batch,
-        result=out,
-        b_factors=plddt_b_factors,
-        chain_index=chain_index,
-        remark=remark,
-        parents=template_domain_names,
-        parents_chain_index=template_chain_index,
-    )
-
-    return unrelaxed_protein
-
-
 def generate_feature_dict(
     tags,
     seqs,
@@ -248,11 +182,11 @@ def list_files_with_extensions(dir, extensions):
 def main(args):
     # Create the output directory
     os.makedirs(args.output_dir, exist_ok=True)
-    # if args.custom_template is None:
-    #     model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
-    # else:
-    #     model_list = ["model_1", "model_2"]
-    model_list = ["model_1", "model_3"]
+    if args.custom_template is None:
+        model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
+    else:
+        model_list = ["model_1", "model_2"]
+
     best_plddt = 0
     for model_name in model_list:
         config = model_config(model_name)
@@ -376,7 +310,13 @@ def main(args):
             if mean_plddt > best_plddt:
                 best_plddt = mean_plddt
                 best_protein = prep_output(
-                    out, processed_feature_dict, feature_dict, feature_processor, args
+                    out,
+                    processed_feature_dict,
+                    feature_dict,
+                    feature_processor,
+                    args.config_preset,
+                    args.multimer_ri_gap,
+                    args.subtract_plddt,
                 )
                 output_name = "{}_{}_{:.2f}".format(tag, model_name, best_plddt)
                 if args.output_postfix is not None:

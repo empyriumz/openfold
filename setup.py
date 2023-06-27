@@ -23,7 +23,6 @@ from torch.utils.cpp_extension import (
 )
 
 
-
 version_dependent_macros = [
     "-DVERSION_GE_1_1",
     "-DVERSION_GE_1_3",
