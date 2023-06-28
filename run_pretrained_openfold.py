@@ -49,8 +49,7 @@ torch.set_grad_enabled(False)
 
 from openfold.config import model_config
 from openfold.data import templates, feature_pipeline, data_pipeline
-from openfold.np import residue_constants, protein
-import openfold.np.relax.relax as relax
+
 
 from openfold.utils.tensor_utils import (
     tensor_tree_map,
@@ -100,25 +99,6 @@ def precompute_alignments(tags, seqs, alignment_dir, args):
 
 def round_up_seqlen(seqlen):
     return int(math.ceil(seqlen / TRACING_INTERVAL)) * TRACING_INTERVAL
-
-
-def run_model(model, batch, tag, args):
-    with torch.no_grad():
-        # Temporarily disable templates if there aren't any in the batch
-        template_enabled = model.config.template.enabled
-        model.config.template.enabled = template_enabled and any(
-            ["template_" in k for k in batch]
-        )
-
-        logger.info(f"Running inference for {tag}...")
-        t = time.perf_counter()
-        out = model(batch)
-        inference_time = time.perf_counter() - t
-        logger.info("Inference time: {:.1f}".format(inference_time))
-
-        model.config.template.enabled = template_enabled
-
-    return out
 
 
 def generate_feature_dict(
@@ -185,7 +165,7 @@ def main(args):
     if args.custom_template is None:
         model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
     else:
-        model_list = ["model_1", "model_2"]
+        model_list = ["model_1", "model_2"] # those two are trained with templates
 
     best_plddt = 0
     for model_name in model_list:
@@ -381,7 +361,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--jax_param_path",
         type=str,
-        default="/hpcgpfs01/scratch/xdai/openfold/params",
+        default="openfold/resources/params",
         help="""Path to JAX model parameters. If None, and openfold_checkpoint_path
              is also None, parameters are selected automatically according to 
              the model name from openfold/resources/params""",
