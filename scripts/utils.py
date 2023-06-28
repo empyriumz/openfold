@@ -2,7 +2,27 @@ import argparse
 import ctypes
 from datetime import date
 import sys
+import logging
 
+def logging_related(output_path=None, debug=True, training=True):
+    logger = logging.getLogger("pytorch_lightning")
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.setFormatter(formatter)
+    logger.addHandler(stdout_handler)
+    if training:
+        log_filename = str(output_path) + "/training.log"
+    else:
+        log_filename = str(output_path) + "/inference.log"
+    if not debug:
+        assert output_path is not None, "need valid log output path"
+        file_handler = logging.FileHandler(log_filename)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        logging.info("Output path: {}".format(output_path))
 
 def add_data_args(parser: argparse.ArgumentParser):
     parser.add_argument(

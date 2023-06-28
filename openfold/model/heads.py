@@ -22,7 +22,7 @@ from openfold.utils.loss import (
     compute_predicted_aligned_error,
 )
 from openfold.utils.precision_utils import is_fp16_enabled
-
+import torch
 
 class AuxiliaryHeads(nn.Module):
     def __init__(self, config):
