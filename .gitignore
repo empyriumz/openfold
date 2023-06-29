@@ -1,6 +1,7 @@
 openfold/resources/
 alignments/
 tmp/
+evoformer_embedding/
 precomputed_alignments/
 inference_output/
 input_mmcif/
