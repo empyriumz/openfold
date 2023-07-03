@@ -24,6 +24,7 @@ from openfold.utils.loss import (
 from openfold.utils.precision_utils import is_fp16_enabled
 import torch
 
+
 class AuxiliaryHeads(nn.Module):
     def __init__(self, config):
         super(AuxiliaryHeads, self).__init__()

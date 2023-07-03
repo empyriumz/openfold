@@ -165,7 +165,7 @@ def main(args):
     if args.custom_template is None:
         model_list = ["model_1", "model_2", "model_3", "model_4", "model_5"]
     else:
-        model_list = ["model_1", "model_2"] # those two are trained with templates
+        model_list = ["model_1", "model_2"]  # those two are trained with templates
 
     best_plddt = 0
     for model_name in model_list:

@@ -4,8 +4,9 @@ from datetime import date
 import sys
 import logging
 
+
 def logging_related(output_path=None, debug=True, training=True):
-    logger = logging.getLogger("pytorch_lightning")
+    logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
     stdout_handler = logging.StreamHandler(sys.stdout)
@@ -23,6 +24,7 @@ def logging_related(output_path=None, debug=True, training=True):
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
         logging.info("Output path: {}".format(output_path))
+
 
 def add_data_args(parser: argparse.ArgumentParser):
     parser.add_argument(

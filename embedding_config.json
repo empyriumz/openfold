@@ -2,18 +2,19 @@
     "general": 
         {
          "seed": 1, 
-         "gpu_id": 1, 
+         "gpu_id": 0, 
          "debug": 0
         },
     "data":
         {
-        "fasta_path": "single_representation/CA_total_30_identity.fasta",
+        "fasta_path": "/host/Protein-ligand-binding/data_processing/CA/CA_total_30_identity.fasta",
         "precomputed_alignments_path": "/host/Protein-ligand-binding/precomputed_alignment/combined_four_metal_alignment",
         "ligand": "CA",
         "save_output": 1
         },
     "model": {
         "alphafold_model": "model_3",
+        "low_prec": 1,
         "jax_param_path": "openfold/resources/params"
     }
 }
