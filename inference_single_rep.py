@@ -114,9 +114,7 @@ def main(conf):
                 k: torch.as_tensor(v, device=device)
                 for k, v in processed_feature_dict.items()
             }
-            with torch.cuda.amp.autocast(dtype=torch.float16):
-                out = model(processed_feature_dict)
-
+            out = model(processed_feature_dict)
             out = tensor_tree_map(lambda x: np.array(x.detach().cpu()), out)
             inference_time = time.perf_counter() - t
             logging.info("Inference time: {:.1f}".format(inference_time))
