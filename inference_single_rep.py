@@ -136,9 +136,11 @@ if __name__ == "__main__":
 
     output_path = None
     if not conf["general"]["debug"]:
-        output_path = Path("./evoformer_embedding/") / Path(conf["data"]["ligand"])
+        output_path = Path(
+            "/hpcgpfs01/scratch/xdai/updated_evoformer_embedding/"
+        ) / Path(conf["data"]["ligand"])
         output_path.mkdir(parents=True, exist_ok=True)
-        conf["output_path"] = "./" + str(output_path)
+        conf["output_path"] = str(output_path)
         with open(str(output_path) + "/config.json", "w") as f:
             json.dump(conf, f, indent=4)
 

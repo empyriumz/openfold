@@ -1,11 +1,14 @@
 from Bio import SeqIO
 
+
 def process_fasta(fasta_file):
     records = list(SeqIO.parse(fasta_file, "fasta"))
     seq_list, ID_list = [], []
-    with open("/host/Protein-ligand-binding/data_processing/mismatch_ids.txt") as file:
+    with open(
+        "/sdcc/u/xdai/Protein-ligand-binding/data_processing/mismatch_ids.txt"
+    ) as file:
         wrong_ids = set(line.strip() for line in file)
-        
+
     for rec in records:
         if rec.id.upper() in wrong_ids:
             continue
